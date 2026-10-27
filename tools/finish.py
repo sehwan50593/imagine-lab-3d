@@ -18,9 +18,10 @@ from names import NAMES  # noqa: E402
 REPO = "sehwan50593/imagine-lab-3d"
 
 
-def download(run, pattern, dst):
-    subprocess.run(["gh", "run", "download", str(run), "--repo", REPO, "--pattern", pattern, "--dir", str(dst)],
-                   check=True)
+def download(run, pattern, dst, need=True):
+    r = subprocess.run(["gh", "run", "download", str(run), "--repo", REPO, "--pattern", pattern, "--dir", str(dst)])
+    if need and r.returncode:   # 조각은 실행마다 없을 수 있음 (빠진 조각만 다시 그린 실행)
+        raise SystemExit(f"내려받기 실패: {run} {pattern}")
 
 
 music_run, out = sys.argv[1], Path(sys.argv[2])
@@ -31,7 +32,7 @@ for arg in sys.argv[3:]:
     parts = {}
     for run in runs.split(","):
         d = tmp / ep / run
-        download(run, f"full-{ep}-*", d)
+        download(run, f"full-{ep}-*", d, need=False)
         for mp4 in d.rglob(f"{ep}_*.mp4"):
             parts[int(re.search(r"_(\d+)$", mp4.stem).group(1))] = mp4
     n = len(parts)
