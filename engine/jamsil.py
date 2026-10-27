@@ -12,6 +12,19 @@ from .common import ASSETS, BUILD
 CX, CY, RAD = -850.0, 250.0, 1750.0     # 원판 중심·반경 (타워 = 원점)
 TOWER_H = 555.0
 FLOOR = 3.1
+# 동네별 원판 (오픈스트리트맵 자료 이름 → 중심·반경·롯데타워 여부)
+AREAS = {"jamsil": dict(cx=-850.0, cy=250.0, rad=1750.0, tower=True)}
+
+
+def use_area(name):
+    """다른 동네로 바꿀 때: 이 모듈의 원판 상수를 바꾸고 geometry(name)을 부름."""
+    global CX, CY, RAD, AREA
+    a = AREAS[name]
+    CX, CY, RAD = a["cx"], a["cy"], a["rad"]
+    AREA = name
+
+
+AREA = "jamsil"
 
 
 def _unpack(pts, off):
@@ -60,12 +73,16 @@ def _area(p):
     return 0.5 * float(np.sum(p[:, 0] * np.roll(p[:, 1], -1) - np.roll(p[:, 0], -1) * p[:, 1]))
 
 
-def geometry():
-    """한 번 계산해 build/_jamsil_geo.npz 에 저장 (모든 잠실 편 공용)."""
-    cache = BUILD / "_jamsil_geo_v2.npz"
+def geometry(area=None):
+    """한 번 계산해 build/_<동네>_geo.npz 에 저장 (같은 동네 편 공용)."""
+    if area and area != AREA:
+        use_area(area)
+    name = AREA
+    cache = BUILD / ("_jamsil_geo_v2.npz" if name == "jamsil" else f"_{name}_geo_v1.npz")
     if cache.exists():
         return dict(np.load(cache, allow_pickle=False))
-    z = np.load(ASSETS / "geo" / "jamsil.npz")
+    z = np.load(ASSETS / "geo" / f"{name}.npz")
+    has_tower = AREAS[name].get("tower", False)
     rs = np.random.default_rng(7)
     # ── 건물 ──
     bv, bf, bfs, bfid, bvid, bvz = [], [], [], [], [], []
@@ -78,7 +95,7 @@ def geometry():
             continue
         h = float(z["b_h"][i])
         area = abs(_area(p))
-        if p[:, 0].min() < 0 < p[:, 0].max() and p[:, 1].min() < 0 < p[:, 1].max() and area < 9000:
+        if has_tower and p[:, 0].min() < 0 < p[:, 0].max() and p[:, 1].min() < 0 < p[:, 1].max() and area < 9000:
             tower_idx = len(cent)
             h = TOWER_H
         k = int(z["b_kind"][i])
@@ -238,6 +255,12 @@ def geometry():
     return out
 
 
+def burn_attr_out(nt, K):
+    a = nt.nodes.new("ShaderNodeAttribute")
+    a.attribute_name = "burn"
+    return a.outputs["Fac"]
+
+
 class PathWalkers:
     """선(폴리라인) 위를 오가는 에이전트. 끝에 닿으면 되돌아가거나 근처 다른 선으로 옮김."""
 
@@ -292,7 +315,7 @@ class Jamsil:
         self.b_mesh = self._mesh("buildings", geo["bv"], geo["bf"], geo["bfs"], self._mat_building())
         me = self.b_mesh.data
         me.attributes.new("bid", "FLOAT", "FACE").data.foreach_set("value", geo["bfid"].astype(np.float32))
-        for a in ("glow", "dark"):
+        for a in ("glow", "dark", "burn"):
             me.attributes.new(a, "FLOAT", "FACE")
         me.attributes.new("gcol", "FLOAT_COLOR", "FACE")
         self.bv0 = geo["bv"].copy()
@@ -307,8 +330,7 @@ class Jamsil:
             self._mesh("green", geo["gv"] + np.array([0, 0, 0.06], np.float32), geo["gf"], geo["gfs"],
                        K.mat_simple("m_grass", (0.16, 0.32, 0.12), 0.9))
         # 바닥 원판 + 흙 옆면
-        top, side = K.island(ctx, RAD, thick=25.0, depth=420.0, top_mat=K.mat_simple("m_city_ground",
-                                                                                     (0.30, 0.30, 0.31), 0.9))
+        top, side = K.island(ctx, RAD, thick=25.0, depth=420.0, top_mat=self._mat_ground())
         top.location = side.location = (CX, CY, 0.0)
         # 나무
         leaf = K.mat_inst("m_jleaf", 0.85)
@@ -376,6 +398,8 @@ class Jamsil:
         dark.attribute_name = "dark"
         lit_frac = K.math_node(nt, "MULTIPLY", ctx.ctl_node(nt, "lights", 0.6),
                                K.math_node(nt, "SUBTRACT", 1.0, dark.outputs["Fac"]))
+        lit_frac = K.math_node(nt, "MULTIPLY", lit_frac,
+                               K.math_node(nt, "SUBTRACT", 1.0, burn_attr_out(nt, K)))
         lit = K.math_node(nt, "LESS_THAN", wn.outputs["Value"], lit_frac)
         pal = nt.nodes.new("ShaderNodeValToRGB")
         K.ln(nt, rnd.outputs["Value"], pal.inputs[0])
@@ -389,6 +413,13 @@ class Jamsil:
         base = K.mix_rgb(nt, win, pal.outputs["Color"], (0.05, 0.07, 0.10))
         roof = K.math_node(nt, "GREATER_THAN", nsep.outputs["Z"], 0.5)
         base = K.mix_rgb(nt, roof, base, (0.35, 0.36, 0.38))
+        burn = nt.nodes.new("ShaderNodeAttribute")
+        burn.attribute_name = "burn"
+        bn = nt.nodes.new("ShaderNodeTexNoise")
+        bn.inputs["Scale"].default_value = 0.08
+        K.ln(nt, geo.outputs["Position"], bn.inputs["Vector"])
+        soot = K.mix_rgb(nt, bn.outputs["Fac"], (0.035, 0.03, 0.028), (0.16, 0.13, 0.11))
+        base = K.mix_rgb(nt, burn.outputs["Fac"], base, soot)
         wc = K.mix_rgb(nt, wn.outputs["Color"], (1.0, 0.75, 0.45), (1.0, 0.92, 0.78))
         g = nt.nodes.new("ShaderNodeAttribute")
         g.attribute_name = "glow"
@@ -406,6 +437,28 @@ class Jamsil:
         m.cycles.emission_sampling = "NONE"
         return m
 
+    def _farm(self, nt, col):
+        """ctl 'farm'(0~1): 옛 논밭(이랑 줄무늬)으로 섞기."""
+        K, ctx = self.K, self.ctx
+        geo = nt.nodes.new("ShaderNodeNewGeometry")
+        sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        K.ln(nt, geo.outputs["Position"], sep.inputs[0])
+        rows = K.math_node(nt, "SINE", K.math_node(nt, "MULTIPLY", K.math_node(nt, "ADD", sep.outputs["X"],
+                                                                                  K.math_node(nt, "MULTIPLY", sep.outputs["Y"], 0.35)), 0.9))
+        fn = nt.nodes.new("ShaderNodeTexNoise")
+        fn.inputs["Scale"].default_value = 0.004
+        K.ln(nt, geo.outputs["Position"], fn.inputs["Vector"])
+        field = K.mix_rgb(nt, K.math_node(nt, "GREATER_THAN", fn.outputs["Fac"], 0.5), (0.30, 0.42, 0.14), (0.42, 0.36, 0.20))
+        field = K.mix_rgb(nt, K.math_node(nt, "MULTIPLY_ADD", rows, 0.12, 0.12), field, (0.18, 0.14, 0.08))
+        return K.mix_rgb(nt, ctx.ctl_node(nt, "farm", 0.0), col, field)
+
+    def _mat_ground(self):
+        K = self.K
+        m, nt, out = K.new_mat("m_city_ground")
+        b = K.principled(nt, self._farm(nt, (0.30, 0.30, 0.31)), 0.9)
+        K.ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
+        return m
+
     def _mat_road(self):
         K = self.K
         m, nt, out = K.new_mat("m_jroad")
@@ -414,11 +467,12 @@ class Jamsil:
         is_walk = K.math_node(nt, "COMPARE", rk.outputs["Fac"], 1.0)
         is_walk.node.inputs[2].default_value = 0.1
         col = K.mix_rgb(nt, is_walk, (0.06, 0.065, 0.075), (0.42, 0.40, 0.37))
+        col = self._farm(nt, K.mix_rgb(nt, self.ctx.ctl_node(nt, "farm", 0.0), col, (0.36, 0.30, 0.20)))
         b = K.principled(nt, col, 0.85)
         K.ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
         return m
 
-    def set_buildings(self, hscale=None, glow=None, gcol=None, dark=None):
+    def set_buildings(self, hscale=None, glow=None, gcol=None, dark=None, burn=None):
         """건물별(nb) 값 → 면/꼭짓점 속성."""
         g, me = self.g, self.b_mesh.data
         if hscale is not None:
@@ -430,6 +484,8 @@ class Jamsil:
             me.attributes["glow"].data.foreach_set("value", np.asarray(glow, np.float32)[fid])
         if dark is not None:
             me.attributes["dark"].data.foreach_set("value", np.asarray(dark, np.float32)[fid])
+        if burn is not None:
+            me.attributes["burn"].data.foreach_set("value", np.asarray(burn, np.float32)[fid])
         if gcol is not None:
             c = np.asarray(gcol, np.float32)
             c4 = np.c_[c, np.ones(len(c))][fid].astype(np.float32)

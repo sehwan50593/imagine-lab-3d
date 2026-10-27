@@ -1,7 +1,7 @@
-"""오픈스트리트맵(© OpenStreetMap contributors, ODbL) 잠실 자료 → assets/geo/jamsil.npz
+"""오픈스트리트맵(© OpenStreetMap contributors, ODbL) 동네 자료 → assets/geo/<이름>.npz
 
-사용: python -I tools/prep_jamsil.py <jamsil.json>
-좌표: 롯데월드타워 근처(37.5126N, 127.1025E)를 원점으로 한 미터 단위 평면.
+사용: python -I tools/prep_jamsil.py <osm.json> [이름 위도0 경도0]
+기본: 잠실 (롯데월드타워 근처 37.5126N, 127.1025E 원점), 미터 단위 평면.
 """
 import json
 import math
@@ -10,10 +10,12 @@ from pathlib import Path
 
 import numpy as np
 
-LAT0, LON0 = 37.5126, 127.1025
+NAME = sys.argv[2] if len(sys.argv) > 2 else "jamsil"
+LAT0 = float(sys.argv[3]) if len(sys.argv) > 3 else 37.5126
+LON0 = float(sys.argv[4]) if len(sys.argv) > 4 else 127.1025
 KX = 111320.0 * math.cos(math.radians(LAT0))
 KY = 110540.0
-OUT = Path(__file__).resolve().parent.parent / "assets" / "geo" / "jamsil.npz"
+OUT = Path(__file__).resolve().parent.parent / "assets" / "geo" / f"{NAME}.npz"
 
 ROAD_W = {"motorway": 22, "trunk": 20, "primary": 18, "secondary": 14, "tertiary": 11, "unclassified": 8,
           "residential": 7, "service": 5, "living_street": 6, "pedestrian": 6, "footway": 2.5, "path": 2.2,
