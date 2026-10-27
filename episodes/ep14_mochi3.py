@@ -22,12 +22,19 @@ META = {"id": "ep14", "title": "모찌 가게가 세 곳뿐이라면 사람들�
 NAMES = ["한정선", "고디바", "노티드"]
 COLS = [(1.0, 0.45, 0.65), (1.0, 0.72, 0.28), (0.45, 0.80, 1.0)]
 COLN = ["pink", "yellow", "cyan"]
-# 줄(앞→뒤, 지그재그), 가게 앞, 나가는 방향
-ROWS = [[((-116.0, -20.0), (-116.0, 40.0)), ((-110.0, 40.0), (-110.0, -20.0)), ((-122.0, -20.0), (-122.0, 40.0))],
-        [((-60.0, -61.0), (8.0, -61.0)), ((8.0, -67.0), (-60.0, -67.0)), ((-60.0, -73.0), (8.0, -73.0))],
-        [((-140.0, -130.0), (-140.0, -75.0)), ((-134.0, -75.0), (-134.0, -130.0)), ((-146.0, -130.0), (-146.0, -75.0))]]
-HEAD = [(-116.0, -24.0), (-64.0, -61.0), (-140.0, -134.0)]
-EXIT = [(-1.0, -0.3), (-0.6, -1.0), (0.4, -1.0)]
+# 세 가게를 롯데월드몰 남쪽 광장에 앞뒤로 (한 화면에 다 보이게, 10-28 오너: 고정 시점)
+# 가게는 왼쪽(서쪽), 줄은 오른쪽으로 가로로 늘어서서 길이가 한눈에 보임 — 뒤 한정선 · 가운데 노티드 · 앞 고디바
+HEAD_X, TAIL_X = -38.0, -8.0
+BAND_Y = [[-58.0 - 2.5 * i for i in range(6)], [-78.0, -80.5, -83.0], [-91.0 - 2.5 * i for i in range(6)]]
+
+
+def _zig(ys):
+    return [((HEAD_X, y), (TAIL_X, y)) if i % 2 == 0 else ((TAIL_X, y), (HEAD_X, y)) for i, y in enumerate(ys)]
+
+
+ROWS = [_zig(BAND_Y[0]), _zig(BAND_Y[2]), _zig(BAND_Y[1])]     # 0 한정선(뒤), 1 고디바(앞), 2 노티드(가운데)
+HEAD = [(HEAD_X - 3.0, ROWS[j][0][0][1]) for j in range(3)]
+EXIT = [(-1.0, 0.15), (-1.0, -0.15), (-1.0, 0.0)]
 ENTRIES = [(-260.0, 40.0), (-240.0, -60.0), (-100.0, -180.0), (40.0, -120.0)]
 MALL = (-41.0, 20.0)
 POPULAR = np.log([123.0, 7.14, 25.0])          # 네이버 월간 검색(만 건): 한정선·고디바 모찌, 노티드는 가정
@@ -37,8 +44,15 @@ STOCK_K, CAP_G = 300, 150
 TOL = ([15, 30, 45, 60, 90], [0.27, 0.51, 0.16, 0.04, 0.02])
 POOL = 700
 SPACING = 0.7
-CLOCK = [(0.0, 270.0), (4.5, 330.0), (9.4, 400.0), (10.0, 630.0), (16.0, 750.0), (22.0, 840.0), (28.0, 930.0),
-         (34.0, 1020.0), (40.0, 1140.0), (45.0, 1200.0), (56.0, 1200.0)]
+RATE = 0.25   # 장면 안에서는 영상 1초 = 15초 (사람 움직임이 자연스럽게), 장면 사이에서만 시간이 건너뜀
+SCENES = [(0.0, 4.5, 270.0), (4.5, 10.0, 365.0), (10.0, 16.0, 640.0), (16.0, 22.0, 750.0), (22.0, 28.0, 842.0),
+          (28.0, 34.0, 930.0), (34.0, 40.0, 1020.0), (40.0, 46.0, 1192.0), (46.0, 56.0, 1200.0)]
+CLOCK = []
+for _t0, _t1, _m in SCENES:
+    CLOCK += [(_t0 + 0.005, _m), (_t1 - 0.005, _m + (RATE * (_t1 - _t0) if _m < 1200 else 0.0))]
+CLOCK[0] = (0.0, CLOCK[0][1])
+FLASH = [(t0, 0.22, (0.0, 0.0, 0.0)) for t0, _, _ in SCENES[1:]]   # 장면 전환 = 눈 깜빡임
+WALK = 1.4    # m/s
 
 
 def clock_at(t):
@@ -188,24 +202,24 @@ BEATS = [
          sub="당신이라면\n어디에 먼저 줄 서실 건가요?"),
 ]
 GRADE = {"exposure": 0.95, "bloom": 0.28, "bloom_thr": 1.05, "vignette": 0.3}
-SKY = [(0.0, "NIGHT"), (5.0, "NIGHT"), (7.2, "MORNING"), (9.6, "DAY"), (35.5, "DAY"), (37.5, "DUSK"),
-       (39.5, "NIGHT"), (56.0, "NIGHT")]
-# 벤치(석촌호수 쪽 공원, 고디바 줄 남쪽)에 앉은 눈높이에서 고개만 돌려 봄
-EYE = (-30.0, -112.0, 1.25)
-T_TOWER, T_MALL = (14.0, -6.0, 300.0), (-41.0, 0.0, 30.0)
-T_G, T_H, T_K = (-26.0, -67.0, 1.6), (-116.0, -8.0, 1.8), (-140.0, -122.0, 1.6)
-T_GH = (-70.0, -40.0, 2.0)
-T_HK = (-128.0, -48.0, 2.0)
-CAM = [(0.0, T_TOWER, 22.0), (2.6, T_TOWER, 22.0), (4.3, T_HK, 30.0),
-       (4.7, T_G, 48.0), (9.8, (-20.0, -66.0, 1.4), 52.0),
-       (10.2, T_H, 70.0), (15.8, (-114.0, 0.0, 1.8), 78.0),
-       (16.2, T_GH, 45.0), (21.8, T_HK, 50.0),
-       (22.2, T_K, 70.0), (27.8, (-140.0, -116.0, 1.6), 78.0),
-       (28.2, T_K, 60.0), (33.8, T_H, 65.0),
-       (34.2, (-108.0, -28.0, 1.6), 80.0), (39.8, (-100.0, -34.0, 1.6), 75.0),
-       (40.2, T_HK, 40.0), (45.8, T_GH, 40.0),
-       (46.2, T_MALL, 24.0), (51.3, (-41.0, 0.0, 70.0), 22.0),
-       (51.7, (-60.0, -20.0, 20.0), 22.0), (56.0, T_TOWER, 20.0)]
+SKY = [(0.0, "NIGHT"), (4.49, "NIGHT"), (4.51, "MORNING"), (9.99, "MORNING"), (10.01, "DAY"), (33.99, "DAY"),
+       (34.01, "DUSK"), (39.99, "DUSK"), (40.01, "NIGHT"), (56.0, "NIGHT")]   # 하늘도 장면 전환 때만 바뀜
+# 고정 시점: 광장 앞 육교 높이에서 세 가게를 한 화면에 (참고 영상처럼 장소는 그대로, 시간만 흐름)
+EYE = (-25.0, -142.0, 20.0)
+T_TOWER, T_SCENE = (14.0, -6.0, 260.0), (-25.0, -80.0, 0.0)
+SHOTS = [  # (t0, t1, 시작 시선, 끝 시선, 시작 렌즈, 끝 렌즈)
+    (0.0, 4.5, T_TOWER, T_SCENE, 18.0, 22.0),
+    (4.5, 46.0, T_SCENE, (-25.0, -79.0, 0.0), 22.0, 23.0),
+    (46.0, 51.5, T_SCENE, (0.0, -20.0, 60.0), 23.0, 18.0),
+    (51.5, 56.0, (0.0, -20.0, 60.0), T_TOWER, 18.0, 17.0)]
+
+
+def cam_at(t):
+    for t0, t1, a, b, l0, l1 in SHOTS:
+        if t < t1 or t1 == SHOTS[-1][1]:
+            u = min(1.0, max(0.0, (t - t0) / (t1 - t0)))
+            u = u * u * (3 - 2 * u)
+            return tuple(x + (y - x) * u for x, y in zip(a, b)), l0 + (l1 - l0) * u
 
 
 def banner_pos(j, t):
@@ -227,19 +241,24 @@ def counter(t, sim):
 
 
 def labels(t, anchors, sim):
+    """줄마다 한가운데 위에 '가게 이름 · 대기 n명' (어느 줄이 어느 가게인지 한눈에)."""
     out = []
-    if t >= 51.5:
+    if t >= 46.3:
         return out
+    f = fi(t)
     for j in range(3):
-        a = anchors.get(f"shop{j}")
-        if a and a[3] and 480 < a[1] < 1440 and 40 < a[0] < 1040:
-            sold = (j == 1 and t >= 9.4)
-            txt = NAMES[j] + (" · 완판" if sold else "") + (" (14시 판매)" if j == 2 and t < 22.0 else "")
-            out.append({"x": a[0], "y": a[1], "text": txt, "color": COLN[j], "size": 26})
-    a = anchors.get("mall")
-    if a and a[3] and 46.6 < t < 51.4 and 480 < a[1] < 1440:
-        out.append({"x": a[0], "y": a[1], "text": "롯데월드몰", "color": "white", "size": 28,
-                    "alpha": ramp(t, 46.6, 47.2)})
+        a = anchors.get(f"q{j}")
+        if not (a and a[3]):
+            continue
+        q = int(sim[f"q{j}"][f])
+        if j == 1 and t >= 9.4:
+            txt = "고디바 · 완판"
+        elif j == 2 and t < 22.0:
+            txt = "노티드 · 14시 판매"
+        else:
+            txt = f"{NAMES[j]} · 대기 {q}명"
+        out.append({"x": min(960.0, max(130.0, a[0])), "y": a[1], "text": txt, "color": COLN[j], "size": 40,
+                    "alpha": 1.0 if t < 45.8 else max(0.0, (46.3 - t) * 2)})
     return out
 
 
@@ -254,11 +273,9 @@ def build(ctx):
     J.set_buildings(gcol=np.tile((1.0, 0.72, 0.28), (nb, 1)).astype(np.float32), glow=np.zeros(nb),
                     dark=np.zeros(nb))
     tr = J.tree_xy
-    near = np.hypot(tr[:, 0] - EYE[0], tr[:, 1] - EYE[1]) < 40.0
-    for tg in (T_G, T_H, T_K):   # 벤치→세 줄 시선 위 나무
-        a, b = np.array(EYE[:2]), np.array(tg[:2])
-        u = np.clip(((tr - a) @ (b - a)) / ((b - a) @ (b - a)), 0, 1)
-        near |= np.hypot(*(tr - (a + u[:, None] * (b - a))).T) < 7.0
+    # 카메라와 세 줄 사이(시야 부채꼴) 나무 치움
+    rel = tr - np.array(EYE[:2])
+    near = (rel[:, 1] > -5) & (rel[:, 1] < 90) & (np.abs(rel[:, 0]) < 12 + rel[:, 1] * 0.45)
     K.set_points(J.to, np.c_[tr, np.zeros(len(tr))], scale=np.where(near, 0.0, J.tree_s0))
     walkers = J.people(260, "walkers")
     co = J.cars(90)
@@ -281,9 +298,15 @@ def build(ctx):
         u = (r - i)[:, None]
         return sl[j][i] * (1 - u) + sl[j][np.minimum(i + 1, len(sl[j]) - 1)] * u
 
+    clk = sim["clock"]
+
+    def jump(tv):
+        g = fi(tv)
+        return clk[min(len(clk) - 1, g + 2)] - clk[max(0, g - 2)] > 1.0
+
     def upd(t, f):
-        v = keyed(t, [(k[0], (*k[1], k[2])) for k in CAM])
-        J.cam.look(EYE, v[:3], v[3])
+        tgt, lens = cam_at(t)
+        J.cam.look(EYE, tgt, lens)
         night = J.light(t, lk)
         ctx.set_ctl("lights", 0.12 + 0.6 * night)
         ctx.set_ctl("carlights", 0.2 + 0.8 * night)
@@ -295,23 +318,24 @@ def build(ctx):
             sc = np.zeros(POOL, np.float32)
             walk = np.zeros(POOL, bool)
             bsc = np.zeros(POOL, np.float32)
-            # 지금 보일 사람: 걸어오는 중(1초) / 줄 / 떠나는 중(2.5초)
-            idx = np.where((ta - 1.0 <= t) & (tsv + 2.5 > t))[0]
+            # 지금 보일 사람: 줄 뒤로 걸어 들어오는 중(3.5초) / 줄 / 떠나는 중(6초)
+            idx = np.where((ta - 3.5 <= t) & (tsv + 6.0 > t))[0]
             if len(idx):
-                served = (tsv <= t)
-                # 줄 안 순서 = 나보다 먼저 와서 아직 안 끝난 사람 수 (분 단위 시각으로 매끄럽게)
                 c = float(sim["clock"][f])
                 ahead_done = np.searchsorted(np.sort(sim[f"srv{j}"]), c)
+                qn = float(sim[f"q{j}"][f])
                 for k in idx:
                     p = k % POOL
-                    if t < ta[k]:              # 걸어오는 중
-                        u = (t - (ta[k] - 1.0))
-                        e = ent[sim[f"ent{j}"][k]]
-                        tail = sl[j][min(len(sl[j]) - 1, int(sim[f"q{j}"][f]))]
-                        q = e + (tail - e) * u
-                        d = tail - e
-                        pos[p], yaw[p], sc[p], walk[p] = q, math.atan2(d[1], d[0]), min(1.0, u * 3), True
-                    elif not served[k]:        # 줄
+                    if t < ta[k]:              # 걸어오는 중: 장면 안에서 온 사람만 (시간이 건너뛸 때 온 사람은 이미 줄에)
+                        if jump(ta[k]):
+                            continue
+                        r = qn + (ta[k] - t) * WALK / SPACING
+                        if r >= len(sl[j]) - 1:
+                            continue
+                        q = slot_pos(j, np.array([r]))[0]
+                        d = slot_pos(j, np.array([max(0.0, r - 1.0)]))[0] - q
+                        pos[p], yaw[p], sc[p], walk[p] = q, math.atan2(d[1], d[0]), 1.0, True
+                    elif t < tsv[k]:           # 줄
                         r = k - ahead_done
                         if r < len(sl[j]):
                             q = slot_pos(j, np.array([float(r)]))[0]
@@ -319,17 +343,19 @@ def build(ctx):
                             d = nxt - q
                             pos[p], sc[p] = q, 1.0
                             yaw[p] = math.atan2(d[1], d[0]) if np.hypot(*d) > 1e-3 else math.atan2(*EXIT[j][::-1])
-                    else:                      # 떠남
+                    else:                      # 떠남 (장면 안에서 끝난 사람만 걸어서 나감)
+                        if jump(tsv[k]):
+                            continue
                         u = t - tsv[k]
                         e = np.array(EXIT[j], np.float32)
                         e /= np.linalg.norm(e)
-                        q = np.array(HEAD[j], np.float32) + e * u * 7.0 + np.array([0.0, 0.25 * (k % 7) - 0.75])
-                        pos[p], yaw[p], sc[p], walk[p] = q, math.atan2(e[1], e[0]), max(0.0, 1 - max(0.0, u - 2.0) * 2), True
+                        q = np.array(HEAD[j], np.float32) + e * u * WALK + np.array([0.0, 0.25 * (k % 7) - 0.75])
+                        pos[p], yaw[p], sc[p], walk[p] = q, math.atan2(e[1], e[0]), min(1.0, (6.0 - u) * 2), True
                         bsc[p] = sc[p] * got[k] * (j != 1)   # 고디바는 새벽엔 번호표만
             K.set_points(qp[j], np.c_[pos, np.zeros(POOL)], scale=sc, rot=np.c_[np.zeros((POOL, 2)), yaw],
                          col=sim[f"shirt{j}"][np.arange(POOL) % max(1, n)] if n else np.ones((POOL, 3)),
                          colors={"col2": sim[f"pants{j}"][np.arange(POOL) % max(1, n)] if n else np.ones((POOL, 3))},
-                         pose=np.where(walk, 1 + (np.floor(t * 4 + np.arange(POOL) * 0.37) % 4), 0).astype(np.float32))
+                         pose=np.where(walk, 1 + (np.floor(t * 2.6 + np.arange(POOL) * 0.37) % 4), 0).astype(np.float32))
             fwd = np.stack([np.cos(yaw), np.sin(yaw)], 1)
             side = np.stack([-np.sin(yaw), np.cos(yaw)], 1)
             K.set_points(bx[j], np.c_[pos + fwd * 0.18 + side * 0.28, np.full(POOL, 0.85)], scale=bsc,
@@ -342,10 +368,15 @@ def build(ctx):
                      scale=(np.hypot(sim["pp"][f][:, 0] - EYE[0], sim["pp"][f][:, 1] - EYE[1]) > 12.0).astype(np.float32),
                      rot=np.c_[np.zeros((260, 2)), sim["py"][f]], col=sim["shirt"], colors={"col2": sim["pants"]},
                      pose=pose_of(sim["ph"][f]))
-        K.set_points(co, np.c_[sim["cp"][f], np.zeros(90)], scale=np.full(90, 10.0),
+        cpf = sim["cp"][f]
+        in_zone = (cpf[:, 0] > -60) & (cpf[:, 0] < 5) & (cpf[:, 1] > -112) & (cpf[:, 1] < -50)   # 줄 선 광장엔 차 없음
+        K.set_points(co, np.c_[cpf, np.zeros(90)], scale=np.where(in_zone, 0.0, 10.0),
                      rot=np.c_[np.zeros((90, 2)), sim["cy"][f]], col=sim["ccol"])
 
     ctx.on_frame(upd)
     for j in range(3):
         ctx.anchor(f"shop{j}", (lambda jj: (lambda t: (*banner_pos(jj, t)[:2], banner_pos(jj, t)[2] + 11.0)))(j))
     ctx.anchor("mall", lambda t: (MALL[0], MALL[1], 70.0))
+    for j in range(3):
+        ys = [r[0][1] for r in ROWS[j]]
+        ctx.anchor(f"q{j}", (lambda x, y: (lambda t: (x, y, 4.5)))((HEAD_X + TAIL_X) / 2, sum(ys) / len(ys)))
