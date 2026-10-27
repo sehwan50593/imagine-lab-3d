@@ -31,6 +31,13 @@ jobs:
       eps: ${{ steps.p.outputs.eps }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: bl
+        with:
+          path: ~/blender.tar.xz
+          key: blender-${{ env.BLENDER_VERSION }}
+      - if: steps.bl.outputs.cache-hit != 'true'
+        run: curl -sSL -o ~/blender.tar.xz "https://download.blender.org/release/Blender4.2/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
       - run: pip install -q numpy
       - id: p
         run: python -m engine.run plan --gh --episodes "${{ inputs.episodes }}" --chunks ${{ inputs.chunks }} --mode ${{ inputs.mode }} --step ${{ inputs.step }} >> "$GITHUB_OUTPUT"
