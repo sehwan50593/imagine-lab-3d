@@ -13,7 +13,8 @@ NAMES = {"ep01_cats": "01_고양이만_남는다면", "ep02_minecraft": "02_마�
          "ep05_war": "05_남북전쟁이_일어난다면", "ep06_onenation": "06_전세계가_하나의_나라가_된다면",
          "ep07_nohouse": "07_모든_집이_사라진다면", "ep08_sun": "08_태양이_1초_꺼진다면",
          "ep09_ai": "09_AI가_세상을_지배한다면", "ep10_mochi": "10_고디바모찌_세계열풍이라면",
-         "ep11_landlord": "11_전쟁_후_건물주는"}
+         "ep11_landlord": "11_전쟁_후_건물주는", "ep12_cat_alone": "12_고양이는_주인이_나가면",
+         "ep13_dog_alone": "13_강아지는_주인이_나가면"}
 run, out = sys.argv[1], Path(sys.argv[2])
 tmp = Path(tempfile.mkdtemp(prefix="whatif_dl_"))
 subprocess.run(["gh", "run", "download", run, "--repo", "sehwan50593/imagine-lab-3d", "--pattern", "final-*",
