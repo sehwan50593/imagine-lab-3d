@@ -58,11 +58,13 @@ jobs:
       - if: steps.bl.outputs.cache-hit != 'true'
         run: curl -sSL -o ~/blender.tar.xz "https://download.blender.org/release/Blender4.2/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
       - name: deps
-        timeout-minutes: 12
+        timeout-minutes: 20
         run: |
           mkdir -p ~/blender && tar -xJf ~/blender.tar.xz -C ~/blender --strip-components=1
-          for i in 1 2 3; do timeout 240 sudo apt-get update -qq && break || sleep 15; done
-          for i in 1 2 3; do timeout 300 sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null && break || sleep 15; done
+          # 러너에 이미 있으면 apt를 건너뜀 (apt-get update가 가끔 12분 넘게 멈춤)
+          if ldd ~/blender/blender | grep -q "not found" || ! command -v ffmpeg > /dev/null; then
+            for i in 1 2 3 4; do timeout 150 sudo apt-get install -y -qq --no-install-recommends libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null && break || timeout 150 sudo apt-get update -qq || sleep 10; done
+          fi
           for i in 1 2 3; do timeout 240 pip install -q numpy pillow opencv-python-headless OpenEXR && break || sleep 15; done
           nproc; free -g | head -2
       - name: sim
@@ -87,7 +89,7 @@ jobs:
 
   assemble:
     needs: [plan, render]
-    if: inputs.mode == 'full'
+    if: ${{ !cancelled() && inputs.mode == 'full' }}   # 다른 편 조각이 실패해도 완성된 편은 합침
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -96,10 +98,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        timeout-minutes: 12
+        timeout-minutes: 20
         run: |
-          for i in 1 2 3; do timeout 240 sudo apt-get update -qq && break || sleep 15; done
-          for i in 1 2 3; do timeout 300 sudo apt-get install -y -qq ffmpeg fluidsynth fluid-soundfont-gm > /dev/null && break || sleep 15; done
+          for i in 1 2 3 4; do timeout 150 sudo apt-get install -y -qq --no-install-recommends ffmpeg fluidsynth fluid-soundfont-gm > /dev/null && break || timeout 150 sudo apt-get update -qq || sleep 10; done
           pip install -q numpy
       - uses: actions/download-artifact@v4
         with:

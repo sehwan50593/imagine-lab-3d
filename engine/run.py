@@ -82,6 +82,11 @@ def cmd_assemble(a):
     lst.write_text("".join(f"file '{Path(c).resolve().as_posix()}'\n" for c in a.chunks), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy",
                     str(d / "video.mp4")], check=True)
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                str(d / "video.mp4")], capture_output=True, text=True, check=True).stdout)
+    want = load_ep(a.ep).META["duration"]
+    if abs(dur - want) > 0.5:   # 조각이 빠졌으면 짧은 영상을 만들지 말고 실패
+        raise SystemExit(f"조각 누락: {dur:.2f}s / {want}s")
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     music = d / "music.m4a"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / "video.mp4"), "-i", str(music), "-map", "0:v",
