@@ -62,7 +62,7 @@ def _area(p):
 
 def geometry():
     """한 번 계산해 build/_jamsil_geo.npz 에 저장 (모든 잠실 편 공용)."""
-    cache = BUILD / "_jamsil_geo.npz"
+    cache = BUILD / "_jamsil_geo_v2.npz"
     if cache.exists():
         return dict(np.load(cache, allow_pickle=False))
     z = np.load(ASSETS / "geo" / "jamsil.npz")
@@ -185,6 +185,7 @@ def geometry():
         cross = ((yi > y) != (yj > y)) & (x < (xj - xi) * (y - yi) / (yj - yi + 1e-9) + xi)
         ins = cross.sum(1) % 2 == 1
         trees.extend(cand[ins][:k])
+    street = []
     for ln_ in car_lines:
         for a, b in zip(ln_[:-1], ln_[1:]):
             d = b - a
@@ -192,10 +193,20 @@ def geometry():
             if L < 1:
                 continue
             nrm = np.array([-d[1], d[0]]) / L
-            for u in np.arange(0, L, 22.0):
+            for u in np.arange(0, L, 34.0):
                 for sgn in (-1, 1):
-                    trees.append(a + d / L * u + nrm * sgn * 13.0)
-    trees = np.array(trees, np.float32).reshape(-1, 2)
+                    street.append(a + d / L * u + nrm * sgn * 14.0)
+    street = np.array(street, np.float32).reshape(-1, 2)
+    # 차도 위(다른 차선 위)에 놓인 가로수 제거: 차도 사각형 중심과 너무 가까우면 뺌
+    rq = np.array(rv, np.float32).reshape(-1, 4, 3)
+    rk_ = np.array(rkind)
+    rc = rq[rk_ == 2, :, :2].mean(1)
+    rwid = np.linalg.norm(rq[rk_ == 2, 0, :2] - rq[rk_ == 2, 1, :2], axis=1)
+    keep = np.ones(len(street), bool)
+    for s0 in range(0, len(street), 1500):
+        dd = np.hypot(street[s0:s0 + 1500, None, 0] - rc[None, :, 0], street[s0:s0 + 1500, None, 1] - rc[None, :, 1])
+        keep[s0:s0 + 1500] = ~(dd < rwid[None, :] * 0.5 + 6.0).any(1)
+    trees = np.array(list(trees) + list(street[keep]), np.float32).reshape(-1, 2)
     trees = trees[_in_disc(trees, 10)]
     # 건물 안 나무 제거 (중심 기준 대략)
     cent_a = np.array(cent, np.float32)
