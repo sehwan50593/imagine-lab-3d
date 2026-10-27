@@ -8,6 +8,7 @@ sim 단계(bpy 없음):
 - 주인공 동선: 집 안 길(문·통로 연결망)로 걸어 다님 (영상 시간 기준 속도)
 Blender 단계: 집(바닥·낮게 자른 벽·가구), 고양이/강아지 자세 모형, 주인, 창문 상태 표시판
 """
+from .cuts import snap
 import math
 
 import numpy as np
@@ -670,8 +671,15 @@ def build_home_scene(ctx, E):
 
     def upd(t, f):
         keys = [(k[0], (*cam_target(fr, sim, k[1], f), k[2] + ang, k[3], k[4], k[5])) for k in E.CAM]
-        v = keyed(t, keys)
-        J.cam.set(v[:3], v[3], v[4], v[5], v[6], shift=0.04)
+        v = keyed(t, snap(keys))
+        eye = getattr(E, "EYE", None)
+        if eye is not None and v[5] < 20.0:   # 집 안 장면: 거실 한구석에 서서 고개만 돌려 봄 (1인칭 관찰자)
+            ex, ey, ez = to_world(fr, *eye)
+            e3 = (float(ex), float(ey), float(ez))
+            d = math.dist(e3, v[:3])
+            J.cam.look(e3, v[:3], min(70.0, max(18.0, v[6] * d / max(v[5], 1.0))))
+        else:
+            J.cam.set(v[:3], v[3], v[4], v[5], v[6], shift=0.04)
         night = J.light(t, lk)
         ctx.set_ctl("lights", 0.15 + 0.7 * night)
         ctx.set_ctl("carlights", 0.2 + 0.8 * night)

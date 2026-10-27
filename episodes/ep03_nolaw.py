@@ -12,7 +12,7 @@ import numpy as np
 
 from engine.common import FPS, Beat, frames_of, keyed, ramp
 from engine.jamsil import PathWalkers, geometry
-from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, lines_of, people_colors, pose_of, set_cam, sky_at,
+from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, lines_of, people_colors, pose_of, set_cam, eye_from, sky_at,
                               traffic)
 
 DUR = 56.0
@@ -160,6 +160,7 @@ CAM = [(0.0, (-214.0, 62.0, 3.0), 250, 50, 130.0, 30), (4.4, (-214.0, 62.0, 3.0)
        (45.8, (-214.0, 62.0, 3.0), 270, 48, 130.0, 30), (46.4, (14.0, -6.0, 180.0), 235, 14, 1000.0, 32),
        (52.4, (14.0, -6.0, 180.0), 250, 16, 940.0, 32), (53.0, (-214.0, 62.0, 3.0), 280, 44, 100.0, 30),
        (56.0, (-214.0, 62.0, 3.0), 295, 46, 110.0, 30)]
+EYE = eye_from((0.0, CAM[0][1], 195.0, 0.0, 100.0), 16.0)   # 건물에 안 가리는 방향 (tools/find_eye.py)   # 1인칭 관찰 위치 (육교·옥상 높이에 고정)
 
 
 def build(ctx):
@@ -214,7 +215,7 @@ def build(ctx):
     lk = [(k_, dict(v_, energy=max(v_["energy"], 0.7), amb=max(v_["amb"], 0.11))) for k_, v_ in lk]
 
     def upd(t, f):
-        set_cam(J, t, CAM)
+        set_cam(J, t, CAM, eye=EYE)
         night = J.light(t, lk)
         lawless = 4.5 <= t < 40.5
         ctx.set_ctl("lights", 0.12 + 0.5 * night)

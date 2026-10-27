@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from engine.common import FPS, Beat, frames_of, keyed, ramp
-from engine.jamsil_ep import CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, sky_at, traffic
+from engine.jamsil_ep import CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, eye_from, sky_at, traffic
 
 DUR = 56.0
 META = {"id": "ep07", "title": "만약 세상의 모든 집이 사라진다면?", "duration": DUR,
@@ -185,6 +185,7 @@ CAM = [(0.0, (-1500.0, -600.0, 20.0), 240, 34, 340.0, 30), (4.4, (-1500.0, -600.
        (39.8, (-1500.0, -600.0, 30.0), 250, 32, 460.0, 30), (40.4, ("camp", 0, 2.0), 260, 22, 42.0, 30),
        (47.8, ("camp", 0, 2.0), 280, 24, 48.0, 30), (48.4, ("camp", 0, 4.0), 290, 34, 150.0, 30),
        (56.0, ("camp", 0, 4.0), 305, 38, 200.0, 30)]
+EYE = eye_from(CAM[0], 12.0, 320.0)   # 1인칭 관찰 위치 (육교·옥상 높이에 고정)
 
 
 def build(ctx):
@@ -223,7 +224,7 @@ def build(ctx):
     CAMX = [(k[0], (cc[0], cc[1], k[1][2]) if k[1][0] == "camp" else k[1], *k[2:]) for k in CAM]
 
     def upd(t, f):
-        set_cam(J, t, CAMX)
+        set_cam(J, t, CAMX, eye=EYE)
         night = J.light(t, lk)
         ctx.set_ctl("lights", 0.1 + 0.55 * night)
         ctx.set_ctl("carlights", 0.3 + 0.7 * night)

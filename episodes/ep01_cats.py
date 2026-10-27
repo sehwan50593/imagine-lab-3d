@@ -5,6 +5,7 @@
 - 고양이·쥐: 포식자-피식자 모델(섬 단위 개체 수) + 쫓기/도망 이동
 - 식생: 도로·건물 녹지화, 거리 나무 성장 / 건물: 와이블 분포 수명으로 붕괴
 """
+from engine.cuts import snap
 import math
 
 import numpy as np
@@ -103,7 +104,7 @@ HOTSPOTS = [(-2.8, 2.8), (0.0, -5.6), (5.6, 2.8)]
 
 def cam_at(t):
     ks = [(k[0], (*k[1], k[2], k[3], k[4], k[5])) for k in CAM_KEYS]
-    v = keyed(t, ks)
+    v = keyed(t, snap(ks))
     return v[:3], v[3], v[4], v[5], v[6]
 
 

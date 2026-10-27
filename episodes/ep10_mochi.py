@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from engine.common import FPS, Beat, frames_of, keyed, ramp
-from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, sky_at, traffic)
+from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, eye_from, sky_at, traffic)
 
 DUR = 56.0
 META = {"id": "ep10", "title": "만약 고디바 모찌가 전 세계적인 열풍이 된다면?", "duration": DUR,
@@ -224,6 +224,7 @@ CAM = [(0.0, (-26.0, -67.0, 4.0), 272, 22, 46.0, 30), (4.4, (-26.0, -67.0, 4.0),
        (44.6, (-200.0, 50.0, 10.0), 230, 55, 1000.0, 28), (45.4, (14.0, -6.0, 220.0), 250, 10, 980.0, 32),
        (51.6, (14.0, -6.0, 220.0), 262, 12, 900.0, 32), (52.4, (-26.0, -67.0, 4.0), 268, 24, 48.0, 30),
        (56.0, (-26.0, -67.0, 4.0), 282, 26, 44.0, 30)]
+EYE = eye_from(CAM[0], 15.0, 75.0)   # 1인칭 관찰 위치 (육교·옥상 높이에 고정)
 
 
 def build(ctx):
@@ -255,7 +256,7 @@ def build(ctx):
         return np.c_[p + fwd * 0.18 + side * 0.28, np.full(len(p), 0.85)]
 
     def upd(t, f):
-        set_cam(J, t, CAM)
+        set_cam(J, t, CAM, eye=EYE)
         night = J.light(t, lk)
         ctx.set_ctl("lights", 0.12 + 0.4 * night)
         ctx.set_ctl("carlights", 0.2 + 0.8 * night)

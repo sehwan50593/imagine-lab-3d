@@ -13,7 +13,7 @@ import math
 import numpy as np
 
 from engine.common import FPS, Beat, frames_of, keyed, ramp
-from engine.jamsil_ep import CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, sky_at, traffic
+from engine.jamsil_ep import CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, eye_from, sky_at, traffic
 
 AREA = "apgujeong"
 DUR = 56.0
@@ -331,6 +331,7 @@ CAM = [(0.0, ROAD, 163, 32, 115.0, 30), (4.4, ROAD, 170, 33, 105.0, 30),
        (42.8, (950.0, 1500.0, 10.0), 265, 36, 1000.0, 30), (43.2, (900.0, 1450.0, 0.0), 280, 38, 1150.0, 30),
        (51.3, (900.0, 1450.0, 0.0), 290, 40, 1080.0, 30), (51.7, ROAD, 340, 36, 150.0, 30),
        (56.0, ROAD, 348, 40, 185.0, 30)]
+EYE = eye_from(CAM[0], 15.0, 130.0)   # 1인칭 관찰 위치 (육교·옥상 높이에 고정)
 
 
 def build(ctx):
@@ -361,7 +362,7 @@ def build(ctx):
     zeros_nb = np.zeros((nb, 3), np.float32)
 
     def upd(t, f):
-        set_cam(J, t, CAM, drift=0.0)
+        set_cam(J, t, CAM, eye=EYE)
         night = J.light(t, lk)
         ctx.set_ctl("lights", 0.12 + 0.75 * night)
         ctx.set_ctl("carlights", 0.2 + 0.8 * night)

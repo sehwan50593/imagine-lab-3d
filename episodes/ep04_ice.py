@@ -5,6 +5,7 @@
 - 얼음: 북극 해빙(부력, 해수면 변화 없음) → 그린란드 7.4m → 남극 58m, 가장자리부터 녹음
 - 한반도 3D 지형(1분 격자): 해수면을 올리고 내리며 잠기는 땅 / 빙하기(−120m) 황해 노출
 """
+from engine.cuts import snap
 import math
 
 import numpy as np
@@ -195,7 +196,7 @@ def build(ctx):
             cam.set((0, 0, 0), az, la, dist, lens)
             K.aim_sun(sun, az, la, side=30.0, up=20.0)
         else:
-            v = keyed(t, [(k[0], (*k[1], *k[2:])) for k in TER_CAM])
+            v = keyed(t, snap([(k[0], (*k[1], *k[2:])) for k in TER_CAM]))
             cam.set(v[:3], v[3], v[4], v[5], v[6])
             sun.rotation_euler = (math.radians(40), 0, math.radians(-150))
 

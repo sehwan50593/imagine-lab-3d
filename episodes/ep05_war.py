@@ -6,6 +6,7 @@
 - 전력망: 착탄이 쌓일수록 도시 불빛이 꺼짐 / 피란 흐름: 수도권에서 남쪽 도시로 이동하는 입자
 숫자는 모두 공개 자료(2022 국방백서, RAND 2020, 미 의회조사국 2017, TrendForce 2026, PRIO, 국립생태원).
 """
+from engine.cuts import snap
 import json
 import math
 
@@ -339,7 +340,7 @@ def build(ctx):
     nfz = np.zeros((NFIRE, 3), np.float32)
 
     def upd(t, f):
-        v = keyed(t, [(k[0], (*k[1], *k[2:])) for k in CAM])
+        v = keyed(t, snap([(k[0], (*k[1], *k[2:])) for k in CAM]))
         cam.set(v[:3], v[3], v[4], v[5], v[6], shift=0.05)
         ctx.set_ctl("south", float(sim["south"][f]))
         ctx.set_ctl("north", float(sim["north"][f]))

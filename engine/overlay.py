@@ -201,6 +201,17 @@ def counter_img(top, main):
 
 
 COUNTER_Y = 760
+SPECIAL = ("반전", "지금", "가정", "만약", "결과", "가상 시나리오", "현재", "오늘", "잠실", "1950년의 기억",
+           "얼마나 걸릴까?", "그럼 11시간은?", "2만 년 전", "TEST")   # 시간이 아닌 배지 — 이것만 위 가운데 칩으로
+
+
+def auto_blinks(beats):
+    out, prev = [], None
+    for b in beats:
+        if prev is not None and b.badge != prev and b.t0 > 0.1:
+            out.append((b.t0, 0.2, (0.0, 0.0, 0.0)))
+        prev = b.badge
+    return out
 
 
 class Overlay:
@@ -217,7 +228,10 @@ class Overlay:
         ep = self.ep
         beats = ep.BEATS
         # 장면 전환 번쩍임
-        for tc, dur, c in getattr(ep, "FLASH", []):
+        flashes = list(getattr(ep, "FLASH", []))
+        if getattr(ep, "STYLE", "bench") == "bench":
+            flashes += [f for f in auto_blinks(beats) if all(abs(f[0] - g[0]) > 0.3 for g in flashes)]
+        for tc, dur, c in flashes or []:
             a = max(0.0, 1.0 - abs(t - tc) / dur)
             if a > 0:
                 img *= (1 - a)
@@ -229,9 +243,9 @@ class Overlay:
                 paste(img, im, lb["x"], lb["y"] - im.height / 2 - lb.get("lift", 6),
                       alpha=lb.get("alpha", 1.0), scale=lb.get("scale", 1.0))
         # HUD: 시뮬레이션 실행 표시 + 경과 시간
-        bench = getattr(ep, "STYLE", "") == "bench"
+        bench = getattr(ep, "STYLE", "bench") == "bench"   # 10-27부터 모든 편 기본
         if bench:
-            c = ep.counter(t, self.sim) if hasattr(ep, "counter") else None
+            c = ep.counter(t, self.sim) if hasattr(ep, "counter") else self._counter(t)
             if c:
                 im = counter_img(*c)
                 paste(img, im, W - 30 - im.width / 2, COUNTER_Y, 1.0)
@@ -246,7 +260,7 @@ class Overlay:
             # 배지: 이전/다음과 같으면 페이드 없이 유지
             fin = 0 if (self._same(prev, b, "badge") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
             fout = 0 if self._same(nxt, b, "badge") and nxt.t0 <= b.t1 + 0.05 else 0.22
-            if b.badge:
+            if b.badge and (not bench or b.badge in SPECIAL):   # 시간 배지는 오른쪽 카운터로
                 paste(img, badge_img(b.badge), W / 2, BADGE_Y, block_alpha(t, b.t0, b.t1, fin, fout))
             big = b.big(t, self.sim) if callable(b.big) else b.big
             same_title = lambda o: o is not None and o.title == b.title and o.label == b.label and \
@@ -270,6 +284,16 @@ class Overlay:
                 paste(img, sub_img(b.sub, bench), W / 2, SUB_CY - (40 if bench else 0),
                       block_alpha(t, b.t0, b.t1, fin, fout))
             break
+
+    def _counter(self, t):
+        """편에 counter()가 없으면 지금까지의 마지막 시간 배지(D+1, 1년 후…)를 오른쪽 카운터로."""
+        last = None
+        for b in self.ep.BEATS:
+            if b.t0 > t + 1e-3:
+                break
+            if b.badge and b.badge not in SPECIAL:
+                last = b.badge
+        return ("경과", last) if last else None
 
     def _hud(self, img, t, hud):
         key = ("hud", hud.get("left", "SIM"), hud.get("right", ""), hud.get("right2", ""))

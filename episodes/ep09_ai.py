@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from engine.common import FPS, Beat, frames_of, keyed, ramp
-from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, sky_at, traffic)
+from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose_of, set_cam, eye_from, sky_at, traffic)
 
 DUR = 56.0
 META = {"id": "ep09", "title": "만약 AI가 세상을 지배한다면?", "duration": DUR,
@@ -132,6 +132,7 @@ CAM = [(0.0, (130.0, -95.0, 3.0), 322, 24, 48.0, 30), (4.4, (130.0, -95.0, 3.0),
        (40.4, (14.0, -6.0, 150.0), 240, 10, 760.0, 32), (47.8, (14.0, -6.0, 150.0), 255, 12, 720.0, 32),
        (48.4, (130.0, -95.0, 3.0), 320, 28, 60.0, 30), (52.8, (130.0, -95.0, 3.0), 330, 30, 70.0, 30),
        (53.4, (-200.0, 0.0, 20.0), 260, 40, 1500.0, 28), (56.0, (-200.0, 0.0, 20.0), 275, 44, 1650.0, 28)]
+EYE = eye_from(CAM[0], 15.0, 75.0)   # 1인칭 관찰 위치 (육교·옥상 높이에 고정)
 
 
 def build(ctx):
@@ -176,7 +177,7 @@ def build(ctx):
     bd = sim["bd"]
 
     def upd(t, f):
-        set_cam(J, t, CAM)
+        set_cam(J, t, CAM, eye=EYE)
         night = J.light(t, lk)
         a = float(sim["adopt"][f])
         power = 1.0 - 0.55 * ramp(t, 28.0, 31.0) * (1 - ramp(t, 39.5, 40.5) * 0.5)

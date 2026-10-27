@@ -7,6 +7,7 @@
 - 무한 물: 원천 2개 사이에 새 원천이 생기는 물 흐름 세포 자동자
 - 반전: 영상 자체가 픽셀(네모 블록) 2,073,600개임을 보여주는 모자이크
 """
+from engine.cuts import snap
 import math
 
 import numpy as np
@@ -443,7 +444,7 @@ def build(ctx):
     CAM = [(k[0], hero if k[1] == "hero" else k[1], *k[2:]) for k in CAM]
 
     def upd(t, f):
-        v = keyed(t, [(k[0], (*k[1], *k[2:])) for k in CAM])
+        v = keyed(t, snap([(k[0], (*k[1], *k[2:])) for k in CAM]))
         cam.set(v[:3], v[3] + t * 1.5, v[4], v[5], v[6], shift=0.05)
         wave_r = (t - WAVE_T0) * WAVE_V * B
         ctx.set_ctl("wave_r", wave_r if t > WAVE_T0 else -1.0)

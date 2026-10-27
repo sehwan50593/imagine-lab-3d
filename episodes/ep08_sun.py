@@ -5,6 +5,7 @@
 - 태양 표면이 1초 꺼진 '어둠의 껍질'이 빛의 속도로 퍼져 각 행성에 도착하는 시각
 - 반전: 태양 중심에서 나오는 광자의 무작위 걸음(random walk)
 """
+from engine.cuts import snap
 import math
 
 import numpy as np
@@ -337,7 +338,7 @@ def build(ctx):
         for k in CAM_KEYS:
             tgt = tuple(sim["pos_earth"]) if k[1] == "earth" else k[1]
             ks.append((k[0], (*tgt, k[2], k[3], k[4], k[5])))
-        return keyed(t, ks)
+        return keyed(t, snap(ks))
 
     def upd(t, f):
         v = cam_at(t)

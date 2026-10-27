@@ -1,4 +1,5 @@
 """잠실 편 공통: 군중·차·조명·하늘·카메라 (EP03 법 / EP07 집 / EP09 AI / EP10 고디바 모찌)."""
+from .cuts import snap
 import math
 
 import numpy as np
@@ -89,6 +90,21 @@ def cam_keys_eval(t, keys):
     return v[:3], v[3], v[4], v[5], v[6]
 
 
-def set_cam(J, t, keys, drift=0.8):
-    tgt, az, el, dist, lens = cam_keys_eval(t, keys)
-    J.cam.set(tgt, az + t * drift, el, dist, lens, shift=0.04)
+def eye_from(key, el=15.0, dist=None):
+    """첫 카메라 키의 방향으로, 더 낮은 각도(육교·옥상 높이)의 고정 관찰 위치."""
+    import math
+    (x, y, z), az, _, d0 = key[1], key[2], key[3], key[4]
+    d = dist or d0
+    a, e = math.radians(az), math.radians(el)
+    return (x + math.cos(e) * math.cos(a) * d, y + math.cos(e) * math.sin(a) * d, z + math.sin(e) * d)
+
+
+def set_cam(J, t, keys, drift=0.8, eye=None):
+    """eye가 있으면 1인칭 관찰자: 한자리에 서서 각 장면의 목표를 바라봄 (10-27 오너). 렌즈는 원래 화면 크기에 맞춤."""
+    import math
+    tgt, az, el, dist, lens = cam_keys_eval(t, snap(keys))
+    if eye is None:
+        J.cam.set(tgt, az + t * drift, el, dist, lens, shift=0.04)
+        return
+    d = math.dist(eye, tgt)
+    J.cam.look(eye, tgt, min(85.0, max(18.0, lens * d / max(dist, 1.0))))
