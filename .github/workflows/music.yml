@@ -1,0 +1,30 @@
+name: music
+on:
+  workflow_dispatch:
+    inputs:
+      episodes:
+        description: "쉼표로 구분한 에피소드"
+        default: "all"
+jobs:
+  music:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        timeout-minutes: 40
+        run: |
+          # apt 미러가 자주 멈춰서 넉넉히 재시도
+          for i in $(seq 1 10); do sudo timeout 300 apt-get install -y -qq --no-install-recommends ffmpeg fluidsynth fluid-soundfont-gm > /dev/null && break; sudo timeout 300 apt-get update -qq; sleep 20; done
+          command -v fluidsynth && ls /usr/share/sounds/sf2/
+          pip install -q numpy
+      - run: |
+          EPS="${{ inputs.episodes }}"
+          if [ "$EPS" = all ]; then EPS=$(python -c "from engine.run import episodes_all as e; print(','.join(e()))"); fi
+          mkdir -p music
+          for e in ${EPS//,/ }; do python -m engine.run music $e && cp build/$e/music.m4a music/$e.m4a; done
+          ls -la music
+      - uses: actions/upload-artifact@v4
+        with:
+          name: music-all
+          path: music/
+          retention-days: 14
