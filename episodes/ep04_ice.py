@@ -193,7 +193,7 @@ def build(ctx):
             p = K.latlon_to_xyz(la, lo, 1.0)
             az = math.degrees(math.atan2(p[1], p[0]))
             cam.set((0, 0, 0), az, la, dist, lens)
-            sun.rotation_euler = (math.radians(90 - 35), 0, math.radians(az + 90 + 25))
+            K.aim_sun(sun, az, la, side=30.0, up=20.0)
         else:
             v = keyed(t, [(k[0], (*k[1], *k[2:])) for k in TER_CAM])
             cam.set(v[:3], v[3], v[4], v[5], v[6])

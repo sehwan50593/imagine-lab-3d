@@ -808,13 +808,20 @@ def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
         ni = nt.nodes.new("ShaderNodeTexImage")
         ni.image = load_image(night)
         ln(nt, uv, ni.inputs["Vector"])
-        nstr = ctx.ctl_node(nt, "night_lights", 0.0)
+        geo = nt.nodes.new("ShaderNodeNewGeometry")
+        dp = nt.nodes.new("ShaderNodeVectorMath")
+        dp.operation = "DOT_PRODUCT"
+        ln(nt, geo.outputs["Normal"], dp.inputs[0])
+        ln(nt, ctx.ctl_rgb(nt, "sun_dir", (1.0, 0.0, 0.0)), dp.inputs[1])
+        dark = math_node(nt, "SUBTRACT", 1.0, math_node(nt, "MULTIPLY_ADD", dp.outputs["Value"], 5.0, 0.6, clamp=True))
+        nstr = math_node(nt, "MULTIPLY", ctx.ctl_node(nt, "night_lights", 0.0), dark)
+        night_c = mix_rgb(nt, 1.0, ni.outputs["Color"], math_node(nt, "MULTIPLY", nstr, 3.0), "MULTIPLY")
         if emit is None:
-            emit = ni.outputs["Color"]
-            estr = math_node(nt, "MULTIPLY", nstr, 3.0)
+            emit, estr = night_c, 1.0
         else:
-            emit = mix_rgb(nt, 0.5, emit if not isinstance(emit, tuple) else rgb(nt, emit), ni.outputs["Color"], "ADD")
-            estr = math_node(nt, "ADD", estr, math_node(nt, "MULTIPLY", nstr, 3.0))
+            # 국경 색×세기 + 야경 색×세기 (색을 섞지 않고 빛을 더함)
+            border_c = mix_rgb(nt, 1.0, rgb(nt, emit) if isinstance(emit, tuple) else emit, estr, "MULTIPLY")
+            emit, estr = mix_rgb(nt, 1.0, border_c, night_c, "ADD"), 1.0
     b = principled(nt, base, rough, emit=emit, estr=estr, coat=0.08, spec=0.35)
     ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
     m.cycles.emission_sampling = "NONE"
@@ -972,3 +979,12 @@ def mat_water(name="m_water", color=(0.02, 0.09, 0.2), rough=0.08, emit=0.0):
     ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
     m.cycles.emission_sampling = "NONE"
     return m
+
+
+def aim_sun(sun_ob, cam_az, cam_el, side=40.0, up=15.0):
+    """카메라 방향 기준으로 옆(side°)·위(up°)에서 오는 햇빛. 반환: 지구→태양 방향 벡터."""
+    az = math.radians(cam_az + side)
+    el = math.radians(cam_el + up)
+    src = Vector((math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)))
+    sun_ob.rotation_euler = (-src).to_track_quat("-Z", "Y").to_euler()
+    return src
