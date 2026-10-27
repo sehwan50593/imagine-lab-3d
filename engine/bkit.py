@@ -113,6 +113,8 @@ def bm_cube(sx=1, sy=1, sz=1, loc=(0, 0, 0), bottom=False):
 
 def bm_sphere(r=1, loc=(0, 0, 0), seg=16, rings=8, scale=(1, 1, 1), uv=False):
     bm = bmesh.new()
+    if uv:
+        bm.loops.layers.uv.new("UVMap")
     bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=rings, radius=r, calc_uvs=uv)
     for v in bm.verts:
         v.co.x = v.co.x * scale[0] + loc[0]
@@ -743,6 +745,7 @@ def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
           ocean=(0.03, 0.12, 0.30), land=(0.10, 0.30, 0.30), land_hi=(0.30, 0.36, 0.30)):
     """등장방형 텍스처 기반 지구. ctl: 'sea'(해수면 m), 'ice'(얼음 남은 비율), 'borders'(국경 표시 비율)."""
     bm = bmesh.new()
+    bm.loops.layers.uv.new("UVMap")  # calc_uvs는 UV 레이어가 있어야 동작
     bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=seg // 2, radius=radius, calc_uvs=True)
     m, nt, out = new_mat("m_globe")
     uv = nt.nodes.new("ShaderNodeTexCoord").outputs["UV"]
@@ -813,10 +816,10 @@ def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
 
 
 def latlon_to_xyz(lat, lon, r):
-    """UV 구 기준 (u=0 → 경도 -180)."""
+    """UV 구 기준: +X = 경도 0 (u=0.5), +Y = 동경 90 (u=0.75)."""
     la, lo = np.radians(lat), np.radians(lon)
-    x = r * np.cos(la) * np.cos(lo + math.pi)
-    y = r * np.cos(la) * np.sin(lo + math.pi)
+    x = r * np.cos(la) * np.cos(lo)
+    y = r * np.cos(la) * np.sin(lo)
     z = r * np.sin(la)
     return np.stack([x, y, z], -1)
 
