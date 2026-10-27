@@ -344,6 +344,17 @@ class CamRig:
         self.ob.data.dof.focus_distance = focus if focus else (t - loc).length
 
 
+    def look(self, loc, target, lens=None, shift=0.0):
+        """1인칭: 눈 위치에서 목표점을 바라봄 (벤치 시점)."""
+        loc, t = Vector(loc), Vector(target)
+        self.ob.location = loc
+        self.ob.rotation_euler = (t - loc).to_track_quat("-Z", "Y").to_euler()
+        if lens:
+            self.ob.data.lens = lens
+        self.ob.data.shift_y = shift
+        self.ob.data.dof.focus_distance = (t - loc).length
+
+
 # ───────────────────────── 인스턴스(군집) ─────────────────────────
 def instancer(ctx, name, proto, n, vector_scale=False):
     """점 n개에 proto를 복제. 점 속성: scale(float) 또는 size(vec3), rot(vec3), col(color), 추가 float들."""

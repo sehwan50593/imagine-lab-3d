@@ -93,22 +93,24 @@ def badge_img(text):
 
 
 @lru_cache(maxsize=64)
-def sub_img(text):
-    f = font(44, 600)
+def sub_img(text, bench=False):
+    """bench: 아래 자막이 주인공 — 크고 굵게, 거의 불투명한 상자 (10-27 오너: 아래 자막만 읽어도 이해되게)."""
+    fs, fw, box_a = (54, 750, 228) if bench else (44, 600, 168)
+    f = font(fs, fw)
     lines = text.split("\n")
     asc, desc = f.getmetrics()
     lh = asc + desc + 12
     h = lh * len(lines) + 44 - 12
     im = Image.new("RGBA", (SUB_W, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((0, 0, SUB_W - 1, h - 1), radius=22, fill=(6, 8, 18, 168))
+    d.rounded_rectangle((0, 0, SUB_W - 1, h - 1), radius=22, fill=(6, 8, 18, box_a))
     y = 22
     for ln in lines:
         segs = segments(ln, "white")
         fl = f
         width = sum(fl.getlength(s) for s, _ in segs)
         if width > SUB_W - 56:  # 상자보다 길면 그 줄만 작게
-            fl = font(max(26, int(44 * (SUB_W - 56) / width)), 600)
+            fl = font(max(26, int(fs * (SUB_W - 56) / width)), fw)
             width = sum(fl.getlength(s) for s, _ in segs)
         x = (SUB_W - width) / 2
         dy = (f.getmetrics()[0] - fl.getmetrics()[0]) * 0.8
@@ -119,8 +121,15 @@ def sub_img(text):
     return im
 
 
-def title_img(beat, big_text):
+def title_img(beat, big_text, bench=False):
     lines = []
+    if bench:   # 위 글씨는 짧은 머리말 한 줄 + 숫자만, 출처는 설명란으로
+        if beat.title:
+            for ln in beat.title.split("\n"):
+                lines.append((ln, min(beat.title_size, 58), 800, "white", 5))
+        if big_text:
+            lines.append((big_text, min(beat.big_size, 84), 900, beat.big_color, 6))
+        return text_block(lines) if lines else None
     if beat.label:
         lines.append((beat.label, 62, 800, beat.label_color, 5))
     if beat.title:
@@ -175,6 +184,25 @@ def block_alpha(t, t0, t1, fin=0.32, fout=0.28):
     return clamp(min(a_in, a_out))
 
 
+@lru_cache(maxsize=256)
+def counter_img(top, main):
+    """화면 오른쪽 옆 일수·시각 카운터 (예: '1일차' / '06:00')."""
+    f1, f2 = font(30, 700), font(46, 850)
+    w = int(max(f1.getlength(top), f2.getlength(main))) + 44
+    a1, d1 = f1.getmetrics()
+    a2, d2 = f2.getmetrics()
+    h = a1 + d1 + a2 + d2 + 34
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=20, fill=(6, 8, 18, 200), outline=(255, 255, 255, 90), width=2)
+    d.text(((w - f1.getlength(top)) / 2, 12), top, font=f1, fill=(255, 214, 120, 255))
+    d.text(((w - f2.getlength(main)) / 2, 16 + a1 + d1), main, font=f2, fill=(255, 255, 255, 255))
+    return im
+
+
+COUNTER_Y = 760
+
+
 class Overlay:
     """프레임마다 배지·제목·자막·HUD를 합성."""
 
@@ -201,8 +229,15 @@ class Overlay:
                 paste(img, im, lb["x"], lb["y"] - im.height / 2 - lb.get("lift", 6),
                       alpha=lb.get("alpha", 1.0), scale=lb.get("scale", 1.0))
         # HUD: 시뮬레이션 실행 표시 + 경과 시간
-        hud = ep.hud(t, self.sim) if hasattr(ep, "hud") else {}
-        self._hud(img, t, hud)
+        bench = getattr(ep, "STYLE", "") == "bench"
+        if bench:
+            c = ep.counter(t, self.sim) if hasattr(ep, "counter") else None
+            if c:
+                im = counter_img(*c)
+                paste(img, im, W - 30 - im.width / 2, COUNTER_Y, 1.0)
+        else:
+            hud = ep.hud(t, self.sim) if hasattr(ep, "hud") else {}
+            self._hud(img, t, hud)
         for i, b in enumerate(beats):
             if not (b.t0 - 0.01 <= t < b.t1 + 0.01):
                 continue
@@ -218,10 +253,10 @@ class Overlay:
                 (o.big == b.big or (callable(o.big) and o.big is b.big)) and o.note == b.note
             fin = 0 if (same_title(prev) and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.34
             fout = 0 if same_title(nxt) and nxt.t0 <= b.t1 + 0.05 else 0.26
-            key = ("title", b.label, big, b.title, b.note, b.big_size, b.title_size)
+            key = ("title", b.label, big, b.title, b.note, b.big_size, b.title_size, bench)
             im = self.cache.get(key)
             if im is None:
-                im = title_img(b, big)
+                im = title_img(b, big, bench)
                 if not callable(b.big):
                     self.cache[key] = im
             if im is not None:
@@ -232,7 +267,8 @@ class Overlay:
             if b.sub:
                 fin = 0 if (self._same(prev, b, "sub") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
                 fout = 0 if self._same(nxt, b, "sub") and nxt.t0 <= b.t1 + 0.05 else 0.22
-                paste(img, sub_img(b.sub), W / 2, SUB_CY, block_alpha(t, b.t0, b.t1, fin, fout))
+                paste(img, sub_img(b.sub, bench), W / 2, SUB_CY - (40 if bench else 0),
+                      block_alpha(t, b.t0, b.t1, fin, fout))
             break
 
     def _hud(self, img, t, hud):
