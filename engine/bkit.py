@@ -993,3 +993,94 @@ def aim_sun(sun_ob, cam_az, cam_el, side=40.0, up=15.0):
     src = Vector((math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)))
     sun_ob.rotation_euler = (-src).to_track_quat("-Z", "Y").to_euler()
     return src
+
+
+# ───────────────────────── 여러 자세 인스턴스 (걷는 사람) ─────────────────────────
+def instancer_multi(ctx, name, protos, n):
+    """점마다 'pose' 속성으로 protos 중 하나를 골라 복제 (걷기 동작 등)."""
+    sub = bpy.data.collections.new(name + "_poses")
+    ctx.proto.children.link(sub)
+    for i, ob in enumerate(protos):
+        ob.name = f"{name}_pose_{i:02d}"
+        for c in list(ob.users_collection):
+            c.objects.unlink(ob)
+        sub.objects.link(ob)
+    me = bpy.data.meshes.new(name)
+    me.vertices.add(n)
+    for a, k in (("scale", "FLOAT"), ("size", "FLOAT_VECTOR"), ("rot", "FLOAT_VECTOR"), ("col", "FLOAT_COLOR"),
+                 ("pose", "FLOAT"), ("col2", "FLOAT_COLOR")):
+        me.attributes.new(a, k, "POINT")
+    ob = link(bpy.data.objects.new(name, me))
+    ng = bpy.data.node_groups.new(name + "_gn", "GeometryNodeTree")
+    ng.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    ng.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    gi, go = ng.nodes.new("NodeGroupInput"), ng.nodes.new("NodeGroupOutput")
+
+    def attr(nm, dt):
+        a = ng.nodes.new("GeometryNodeInputNamedAttribute")
+        a.data_type = dt
+        a.inputs["Name"].default_value = nm
+        return a.outputs["Attribute"]
+    cmp = ng.nodes.new("FunctionNodeCompare")
+    cmp.data_type = "FLOAT"
+    cmp.operation = "LESS_THAN"
+    ng.links.new(attr("scale", "FLOAT"), cmp.inputs[0])
+    cmp.inputs[1].default_value = 1e-4
+    dl = ng.nodes.new("GeometryNodeDeleteGeometry")
+    dl.domain = "POINT"
+    ng.links.new(gi.outputs[0], dl.inputs["Geometry"])
+    ng.links.new(cmp.outputs[0], dl.inputs["Selection"])
+    ci = ng.nodes.new("GeometryNodeCollectionInfo")
+    ci.inputs["Collection"].default_value = sub
+    ci.inputs["Separate Children"].default_value = True
+    ci.inputs["Reset Children"].default_value = True
+    iop = ng.nodes.new("GeometryNodeInstanceOnPoints")
+    ng.links.new(dl.outputs[0], iop.inputs["Points"])
+    ng.links.new(ci.outputs[0], iop.inputs["Instance"])
+    iop.inputs["Pick Instance"].default_value = True
+    ng.links.new(attr("pose", "FLOAT"), iop.inputs["Instance Index"])
+    ng.links.new(attr("rot", "FLOAT_VECTOR"), iop.inputs["Rotation"])
+    ng.links.new(attr("scale", "FLOAT"), iop.inputs["Scale"])
+    ng.links.new(iop.outputs["Instances"], go.inputs[0])
+    mod = ob.modifiers.new("GN", "NODES")
+    mod.node_group = ng
+    return ob
+
+
+def person_poses(ctx, mat_shirt, mat_pants, mat_skin, mat_hair, height=1.72):
+    """실제 크기(m) 사람: 0=서 있음, 1~4=걷기 주기. 셔츠·바지 색은 인스턴스 'col'·'col2'."""
+    s = height / 1.72
+    poses = []
+    for k in range(5):
+        ph = (k - 1) / 4 * 2 * math.pi if k else None
+        leg = math.radians(28) * math.sin(ph) if k else 0.0
+        arm = -leg * 0.9
+        parts = []
+        # 다리 (엉덩이 높이 0.9m에서 회전)
+        for side, ang in ((-1, leg), (1, -leg)):
+            bm = bm_cube(0.13 * s, 0.14 * s, 0.86 * s, (0, 0, -0.86 * s), bottom=True)
+            for v in bm.verts:
+                v.co = Euler((0, ang, 0)).to_matrix() @ v.co
+                v.co.y += side * 0.085 * s
+                v.co.z += 0.9 * s
+            parts.append((bm, 1))
+        parts.append((bm_cube(0.22 * s, 0.36 * s, 0.56 * s, (0, 0, 0.88 * s), bottom=True), 0))  # 몸통
+        for side, ang in ((-1, arm), (1, -arm)):
+            bm = bm_cube(0.1 * s, 0.1 * s, 0.6 * s, (0, 0, -0.6 * s), bottom=True)
+            for v in bm.verts:
+                v.co = Euler((0, ang, 0)).to_matrix() @ v.co
+                v.co.y += side * 0.23 * s
+                v.co.z += 1.4 * s
+            parts.append((bm, 0))
+        parts.append((bm_sphere(0.115 * s, (0, 0, 1.58 * s), 12, 8), 2))  # 머리
+        parts.append((bm_sphere(0.12 * s, (-0.015 * s, 0, 1.63 * s), 12, 8, scale=(1, 1, 0.7)), 3))  # 머리카락
+        ob = proto(ctx, f"p_person_{k}", join_bms(parts), [mat_shirt, mat_pants, mat_skin, mat_hair], smooth=False)
+        poses.append(ob)
+    return poses
+
+
+def mat_inst2(name, attr="col2", rough=0.7):
+    m, nt, out = new_mat(name)
+    b = principled(nt, inst_attr(nt, attr), rough)
+    ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
+    return m

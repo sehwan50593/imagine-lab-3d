@@ -89,9 +89,26 @@ class Sky:
         yy2, xx2 = np.mgrid[0:H, 0:W].astype(np.float32)
         r2 = ((xx2 - W / 2) / W) ** 2 + ((yy2 - H * 0.52) / H * 0.9) ** 2
         self.grad += glow * np.exp(-r2 * 7.0)[..., None]
+        self._yy = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
+        self._cache = {}
 
-    def render(self, cam):
+    def _grad(self, top, bot):
+        key = (tuple(np.round(top, 4)), tuple(np.round(bot, 4)))
+        g = self._cache.get(key)
+        if g is None:
+            if len(self._cache) > 64:
+                self._cache.clear()
+            g = np.broadcast_to(top * (1 - self._yy) + bot * self._yy, (H, W, 3)).copy()
+            self._cache[key] = g
+        return g.copy()
+
+    def render(self, cam, t=None, ep=None):
         img = self.grad.copy()
+        gain = 1.0
+        if ep is not None and hasattr(ep, "sky"):
+            top, bot, gain = ep.sky(t)
+            top, bot = np.array(top, np.float32), np.array(bot, np.float32)
+            img = self._grad(top, bot)
         if cam is None:
             return img
         m = np.array(cam[:16], np.float32).reshape(4, 4)
@@ -103,7 +120,7 @@ class Sky:
         f = lens / sh * H
         x = W / 2 + dc[vis, 0] / z[vis] * f
         y = H / 2 - dc[vis, 1] / z[vis] * f
-        b = self.bright[vis, None] * self.col[vis]
+        b = self.bright[vis, None] * self.col[vis] * gain
         ok = (x >= 1) & (x < W - 2) & (y >= 1) & (y < H - 2)
         x, y, b = x[ok], y[ok], b[ok]
         x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int)
@@ -115,11 +132,11 @@ class Sky:
         return img + layer
 
 
-def finish(rgba, grade, sky, cam):
+def finish(rgba, grade, sky, cam, t=None, ep=None):
     g = grade or {}
     up = cv2.resize(rgba, (W, H), interpolation=cv2.INTER_CUBIC) if rgba.shape[1] != W else rgba
     a = np.clip(up[..., 3:4], 0, 1)
-    x = np.maximum(up[..., :3], 0) + sky.render(cam) * (1 - a)
+    x = np.maximum(up[..., :3], 0) + sky.render(cam, t, ep) * (1 - a)
     x = bloom(x, g.get("bloom_thr", 0.9), g.get("bloom", 0.32), g.get("bloom_radius", 1.0))
     x = aces(x * g.get("exposure", 0.9))
     x = srgb(x)
@@ -157,7 +174,7 @@ def run(ep, sim, frames, in_dir, out, preview=False):
     shots = []
     for f in frames:
         lin = load_lin(in_dir / f"{f:05d}.exr")
-        img = finish(lin, grade, sky, cams.get(f)).astype(np.float32)
+        img = finish(lin, grade, sky, cams.get(f), f / FPS, ep).astype(np.float32)
         if hasattr(ep, "postfx"):
             img = ep.postfx(img, f / FPS)
         ov.draw(img, f / FPS, anchors.get(f, {}))

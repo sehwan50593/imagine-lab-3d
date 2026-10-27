@@ -52,6 +52,10 @@ def text_block(lines, pad=18):
         f = font(size, weight)
         segs = segments(text, dcol)
         width = sum(f.getlength(s) for s, _ in segs)
+        if width > 1000:  # 화면 폭을 넘으면 글자 크기를 줄임
+            size = max(24, int(size * 1000 / width))
+            f = font(size, weight)
+            width = sum(f.getlength(s) for s, _ in segs)
         asc, desc = f.getmetrics()
         rendered.append((segs, f, width, asc + desc, stroke))
     bw = int(max(r[2] for r in rendered)) + pad * 2 + 16
@@ -100,13 +104,17 @@ def sub_img(text):
     d.rounded_rectangle((0, 0, SUB_W - 1, h - 1), radius=22, fill=(6, 8, 18, 168))
     y = 22
     for ln in lines:
-        x = 0
         segs = segments(ln, "white")
-        width = sum(f.getlength(s) for s, _ in segs)
+        fl = f
+        width = sum(fl.getlength(s) for s, _ in segs)
+        if width > SUB_W - 56:  # 상자보다 길면 그 줄만 작게
+            fl = font(max(26, int(44 * (SUB_W - 56) / width)), 600)
+            width = sum(fl.getlength(s) for s, _ in segs)
         x = (SUB_W - width) / 2
+        dy = (f.getmetrics()[0] - fl.getmetrics()[0]) * 0.8
         for s, c in segs:
-            d.text((x, y), s, font=f, fill=col(c))
-            x += f.getlength(s)
+            d.text((x, y + dy), s, font=fl, fill=col(c))
+            x += fl.getlength(s)
         y += lh
     return im
 
