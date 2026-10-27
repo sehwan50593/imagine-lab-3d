@@ -401,7 +401,7 @@ def add_attr(ob, name, kind="FLOAT"):
     ob.data.attributes.new(name, kind, "POINT")
 
 
-def set_points(ob, pos, scale=None, rot=None, col=None, size=None, **floats):
+def set_points(ob, pos, scale=None, rot=None, col=None, size=None, colors=None, **floats):
     me = ob.data
     n = len(me.vertices)
     pos = np.asarray(pos, np.float32).reshape(-1, 3)
@@ -430,6 +430,11 @@ def set_points(ob, pos, scale=None, rot=None, col=None, size=None, **floats):
         if c.shape[-1] == 3:
             c = np.concatenate([c.reshape(-1, 3), np.ones((len(c.reshape(-1, 3)), 1), np.float32)], 1)
         me.attributes["col"].data.foreach_set("color", fit(c, 4))
+    for k, v in (colors or {}).items():
+        c = np.asarray(v, np.float32)
+        if c.shape[-1] == 3:
+            c = np.concatenate([c.reshape(-1, 3), np.ones((len(c.reshape(-1, 3)), 1), np.float32)], 1)
+        me.attributes[k].data.foreach_set("color", fit(c, 4))
     for k, v in floats.items():
         me.attributes[k].data.foreach_set("value", fit(v, 1))
     me.update()

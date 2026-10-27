@@ -158,6 +158,8 @@ def run(ep, sim, frames, in_dir, out, preview=False):
     for f in frames:
         lin = load_lin(in_dir / f"{f:05d}.exr")
         img = finish(lin, grade, sky, cams.get(f)).astype(np.float32)
+        if hasattr(ep, "postfx"):
+            img = ep.postfx(img, f / FPS)
         ov.draw(img, f / FPS, anchors.get(f, {}))
         u8 = (np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8)
         if writer:
