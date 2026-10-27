@@ -48,6 +48,7 @@ def main():
     ap.add_argument("--samples", type=int, default=24)
     ap.add_argument("--device", default="CPU")
     ap.add_argument("--threads", type=int, default=0)
+    ap.add_argument("--bounces", type=int, default=4)
     ap.add_argument("--save-blend", default="")
     a = ap.parse_args(argv)
 
@@ -58,14 +59,14 @@ def main():
     ctx = bkit.Ctx(sim, a, build_dir)
     t0 = time.time()
     ep.build(ctx)
-    bkit.configure(ctx.scene, a.pct, a.samples, a.device)
+    bkit.configure(ctx.scene, a.pct, a.samples, a.device, bounces=a.bounces)
     if a.threads:
         ctx.scene.render.threads_mode = "FIXED"
         ctx.scene.render.threads = a.threads
     print(f"[build] {time.time() - t0:.1f}s", flush=True)
     if a.save_blend:
         bpy.ops.wm.save_as_mainfile(filepath=a.save_blend)
-    out = Path(a.out)
+    out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     anchors_path = out / "anchors.json"
     anchors = json.load(open(anchors_path)) if anchors_path.exists() else {}

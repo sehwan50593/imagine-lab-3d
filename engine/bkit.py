@@ -34,6 +34,17 @@ class Ctx:
         for sock in self.ctl.get(name, []):
             sock.default_value = value
 
+    def ctl_rgb(self, nt, name, color):
+        n = nt.nodes.new("ShaderNodeRGB")
+        n.outputs[0].default_value = (*color[:3], 1.0)
+        n.label = name
+        self.ctl.setdefault(name, []).append(n.outputs[0])
+        return n.outputs[0]
+
+    def set_rgb(self, name, color):
+        for sock in self.ctl.get(name, []):
+            sock.default_value = (*color[:3], 1.0)
+
     def ctl_node(self, nt, name, value=0.0):
         n = nt.nodes.new("ShaderNodeValue")
         n.outputs[0].default_value = value
@@ -240,12 +251,17 @@ def inst_attr(nt, name, kind="Color"):
     return a.outputs[kind]
 
 
-def mat_inst(name, rough=0.55, emit_attr=None, emit_color=(1, 0.8, 0.5), emit_strength=6.0, coat=0.0):
-    """인스턴스별 색('col' 속성)을 쓰는 재질."""
+def mat_inst(name, rough=0.55, emit_attr=None, emit_color=(1, 0.8, 0.5), emit_strength=6.0, coat=0.0,
+             ctx=None, decay_to=None, emit_ctl=None):
+    """인스턴스별 색('col' 속성)을 쓰는 재질. decay_to=(색) 이면 ctl 'decay'에 따라 그 색으로."""
     m, nt, out = new_mat(name)
     c = inst_attr(nt, "col")
+    if ctx is not None and decay_to is not None:
+        c = mix_rgb(nt, ctx.ctl_node(nt, "decay", 0.0), c, decay_to)
     if emit_attr:
         e = math_node(nt, "MULTIPLY", inst_attr(nt, emit_attr, "Fac"), emit_strength)
+        if ctx is not None and emit_ctl:
+            e = math_node(nt, "MULTIPLY", e, ctx.ctl_node(nt, emit_ctl, 1.0))
         b = principled(nt, c, rough, emit=emit_color, estr=e, coat=coat)
         m.cycles.emission_sampling = "NONE"
     else:
@@ -267,7 +283,7 @@ def world_space(ctx, ambient=(0.30, 0.36, 0.55), ambient_strength=0.35, ground=(
     sep = nt.nodes.new("ShaderNodeSeparateXYZ")
     ln(nt, tc.outputs["Generated"], sep.inputs[0])
     up = math_node(nt, "MULTIPLY_ADD", sep.outputs["Z"], 0.5, 0.5, clamp=True)
-    col = mix_rgb(nt, up, ground, ambient)
+    col = mix_rgb(nt, up, ground, ctx.ctl_rgb(nt, "ambient_col", ambient))
     bg = nt.nodes.new("ShaderNodeBackground")
     ln(nt, col, bg.inputs["Color"])
     ln(nt, ctx.ctl_node(nt, "ambient", ambient_strength), bg.inputs["Strength"])
@@ -311,7 +327,7 @@ class CamRig:
         self.ob = link(bpy.data.objects.new("Cam", cd))
         ctx.scene.camera = self.ob
 
-    def set(self, target, az, el, dist, lens=None, focus=None, roll=0.0):
+    def set(self, target, az, el, dist, lens=None, focus=None, roll=0.0, shift=0.0):
         t = Vector(target)
         a, e = math.radians(az), math.radians(el)
         loc = t + Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e))) * dist
@@ -322,6 +338,7 @@ class CamRig:
             self.ob.rotation_euler.rotate_axis("Z", math.radians(roll))
         if lens:
             self.ob.data.lens = lens
+        self.ob.data.shift_y = shift
         self.ob.data.dof.focus_distance = focus if focus else (t - loc).length
 
 
@@ -805,7 +822,7 @@ def latlon_to_xyz(lat, lon, r):
 
 
 # ───────────────────────── 렌더 설정 ─────────────────────────
-def configure(scene, pct=67, samples=24, device="CPU", fast=False):
+def configure(scene, pct=67, samples=24, device="CPU", fast=False, bounces=4):
     r = scene.render
     r.engine = "CYCLES"
     r.resolution_x, r.resolution_y = 1080, 1920
@@ -820,9 +837,9 @@ def configure(scene, pct=67, samples=24, device="CPU", fast=False):
     c.denoiser = "OPENIMAGEDENOISE"
     c.denoising_input_passes = "RGB_ALBEDO_NORMAL"
     c.denoising_prefilter = "FAST"
-    c.max_bounces = 4
-    c.diffuse_bounces = 2
-    c.glossy_bounces = 2
+    c.max_bounces = bounces
+    c.diffuse_bounces = min(2, bounces - 1)
+    c.glossy_bounces = min(2, bounces - 1)
     c.transmission_bounces = 4
     c.volume_bounces = 0
     c.transparent_max_bounces = 8

@@ -195,14 +195,14 @@ class Overlay:
             prev = beats[i - 1] if i > 0 else None
             nxt = beats[i + 1] if i + 1 < len(beats) else None
             # 배지: 이전/다음과 같으면 페이드 없이 유지
-            fin = 0 if self._same(prev, b, "badge") and prev.t1 >= b.t0 - 0.05 else 0.25
+            fin = 0 if (self._same(prev, b, "badge") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
             fout = 0 if self._same(nxt, b, "badge") and nxt.t0 <= b.t1 + 0.05 else 0.22
             if b.badge:
                 paste(img, badge_img(b.badge), W / 2, BADGE_Y, block_alpha(t, b.t0, b.t1, fin, fout))
             big = b.big(t, self.sim) if callable(b.big) else b.big
             same_title = lambda o: o is not None and o.title == b.title and o.label == b.label and \
                 (o.big == b.big or (callable(o.big) and o.big is b.big)) and o.note == b.note
-            fin = 0 if same_title(prev) and prev.t1 >= b.t0 - 0.05 else 0.34
+            fin = 0 if (same_title(prev) and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.34
             fout = 0 if same_title(nxt) and nxt.t0 <= b.t1 + 0.05 else 0.26
             key = ("title", b.label, big, b.title, b.note, b.big_size, b.title_size)
             im = self.cache.get(key)
@@ -216,26 +216,30 @@ class Overlay:
                 top = (LABEL_Y if b.label else (BIG_Y if big else TITLE_Y)) - 62
                 paste(img, im, W / 2, top + im.height / 2 - 18, a, pop)
             if b.sub:
-                fin = 0 if self._same(prev, b, "sub") and prev.t1 >= b.t0 - 0.05 else 0.25
+                fin = 0 if (self._same(prev, b, "sub") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
                 fout = 0 if self._same(nxt, b, "sub") and nxt.t0 <= b.t1 + 0.05 else 0.22
                 paste(img, sub_img(b.sub), W / 2, SUB_CY, block_alpha(t, b.t0, b.t1, fin, fout))
             break
 
     def _hud(self, img, t, hud):
-        key = ("hud", hud.get("left", "SIM"), hud.get("right", ""))
+        key = ("hud", hud.get("left", "SIM"), hud.get("right", ""), hud.get("right2", ""))
         im = self.cache.get(key)
         if im is None:
-            im = Image.new("RGBA", (W, 70), (0, 0, 0, 0))
+            im = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
             f = font(26, 700)
             d.text((86, 20), hud.get("left", "SIMULATION"), font=f, fill=(255, 255, 255, 200))
             r = hud.get("right", "")
             if r:
-                d.text((W - 60 - f.getlength(r), 20), r, font=f, fill=(255, 255, 255, 200))
+                d.text((W - 60 - f.getlength(r), 20), r, font=f, fill=(255, 255, 255, 210))
+            r2 = hud.get("right2", "")
+            if r2:
+                f2 = font(24, 600)
+                d.text((W - 60 - f2.getlength(r2), 58), r2, font=f2, fill=(200, 225, 255, 190))
             if len(self.cache) > 400:
                 self.cache.clear()
             self.cache[key] = im
-        paste(img, im, W / 2, 95, 1.0)
+        paste(img, im, W / 2, 115, 1.0)
         # 깜빡이는 실행 표시 점
         on = 0.55 + 0.45 * (0.5 + 0.5 * np.cos(t * 2 * np.pi * 0.9))
         dot = self.cache.get("dot")

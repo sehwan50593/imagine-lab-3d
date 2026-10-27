@@ -10,7 +10,7 @@ on:
         default: "preview"
       chunks:
         description: "full 모드에서 에피소드당 병렬 조각 수"
-        default: "3"
+        default: "6"
       step:
         description: "preview 프레임 간격"
         default: "60"
@@ -18,7 +18,7 @@ on:
         description: "렌더 해상도 % (1080x1920 기준)"
         default: "67"
       samples:
-        default: "24"
+        default: "12"
 
 env:
   BLENDER_VERSION: "4.2.23"
@@ -68,7 +68,7 @@ jobs:
         run: |
           ~/blender/blender -b --factory-startup --python-exit-code 1 -P engine/blender_main.py -- \
             --ep ${{ matrix.ep }} --frames "${{ matrix.frames }}" --out build/${{ matrix.ep }}/frames \
-            --pct ${{ inputs.pct }} --samples ${{ inputs.samples }} --device CPU 2>&1 | grep -E "^\[|Error|Traceback|line [0-9]+" || true
+            --pct ${{ inputs.pct }} --samples ${{ inputs.samples }} --bounces 3 --device CPU 2>&1 | grep -E "^\[|Error|Traceback|line [0-9]+" || true
           test -f build/${{ matrix.ep }}/frames/anchors.json
       - name: post (full)
         if: inputs.mode == 'full'
