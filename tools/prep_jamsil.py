@@ -62,10 +62,49 @@ def pack(polys):
     return np.array(pts, np.float32).reshape(-1, 2), np.array(off, np.int32)
 
 
+def split_none(geom):
+    """자료 범위(bbox)로 잘린 관계 멤버: 범위 밖 점은 None → 이어진 조각들로 나눔."""
+    out, seg = [], []
+    for p in list(geom or []) + [None]:
+        if p:
+            seg.append(xy(p))
+            continue
+        if len(seg) >= 2:
+            out.append(np.array(seg))
+        seg = []
+    return out
+
+
+def chain(parts, tol=0.5):
+    """끝점이 맞닿는 조각을 이어 붙임 → 닫힌 고리 또는 열린 사슬(범위 밖으로 이어지는 강둑)."""
+    parts, out = list(parts), []
+    while parts:
+        cur = parts.pop(0)
+        grown = True
+        while grown:
+            grown = False
+            for i, p in enumerate(parts):
+                if np.allclose(cur[-1], p[0], atol=tol):
+                    cur = np.vstack([cur, p[1:]])
+                elif np.allclose(cur[-1], p[-1], atol=tol):
+                    cur = np.vstack([cur, p[::-1][1:]])
+                elif np.allclose(cur[0], p[-1], atol=tol):
+                    cur = np.vstack([p, cur[1:]])
+                elif np.allclose(cur[0], p[0], atol=tol):
+                    cur = np.vstack([p[::-1], cur[1:]])
+                else:
+                    continue
+                parts.pop(i)
+                grown = True
+                break
+        out.append(cur)
+    return out
+
+
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 blds, bh, bkind = [], [], []
 roads, rw, rk = [], [], []
-water, green = [], []
+water, green, banks = [], [], []
 for el in data["elements"]:
     tags = el.get("tags", {})
     if el["type"] == "way" and "geometry" in el:
@@ -96,17 +135,22 @@ for el in data["elements"]:
             if len(g) >= 4:
                 green.append(g[:-1] if g[0] == g[-1] else g)
     elif el["type"] == "relation" and tags.get("natural") == "water":
-        for m in el.get("members", []):
-            if m.get("role") == "outer" and m.get("geometry"):
-                g = [xy(p) for p in m["geometry"] if p]
-                if len(g) >= 4:
-                    water.append(g)
+        ms = el.get("members", [])
+        for c in chain([s for m in ms if m.get("role") == "outer" for s in split_none(m.get("geometry"))]):
+            if len(c) >= 4 and np.allclose(c[0], c[-1], atol=0.5):
+                water.append([tuple(q) for q in c[:-1]])
+            else:
+                banks.append([tuple(q) for q in c])
+        for c in chain([s for m in ms if m.get("role") == "inner" for s in split_none(m.get("geometry"))]):
+            if len(c) >= 4 and np.allclose(c[0], c[-1], atol=0.5):
+                green.append([tuple(q) for q in c[:-1]])   # 강 속 섬은 땅(녹지)으로
 bp, bo = pack(blds)
 rp, ro = pack(roads)
 wp, wo = pack(water)
 gp, go = pack(green)
+kp, ko = pack(banks)
 np.savez_compressed(OUT, b_pts=bp, b_off=bo, b_h=np.array(bh, np.float32), b_kind=np.array(bkind, np.int8),
                     r_pts=rp, r_off=ro, r_w=np.array(rw, np.float32), r_kind=np.array(rk, np.int8),
-                    w_pts=wp, w_off=wo, g_pts=gp, g_off=go)
+                    w_pts=wp, w_off=wo, g_pts=gp, g_off=go, wb_pts=kp, wb_off=ko)
 print("buildings", len(blds), "tall(>100m)", int(np.sum(np.array(bh) > 100)), "max h", max(bh) if bh else 0)
-print("roads", len(roads), "water", len(water), "green", len(green), "->", OUT, OUT.stat().st_size)
+print("roads", len(roads), "water", len(water), "green", len(green), "banks", len(banks), "->", OUT, OUT.stat().st_size)

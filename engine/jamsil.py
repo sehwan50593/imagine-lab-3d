@@ -13,7 +13,11 @@ CX, CY, RAD = -850.0, 250.0, 1750.0     # 원판 중심·반경 (타워 = 원점
 TOWER_H = 555.0
 FLOOR = 3.1
 # 동네별 원판 (오픈스트리트맵 자료 이름 → 중심·반경·롯데타워 여부)
-AREAS = {"jamsil": dict(cx=-850.0, cy=250.0, rad=1750.0, tower=True)}
+AREAS = {"jamsil": dict(cx=-850.0, cy=250.0, rad=1750.0, tower=True),
+         # 강남 한강변 자료(원점 37.5150N, 127.0235E): 압구정·청담 쪽 / 반포 쪽
+         # river: 한강이 강둑 선의 어느 쪽인지 / fill_heights: 높이 정보 없는 건물(기본값)에 바닥 면적 맞춤 층수
+         "apgujeong": dict(file="gangnam", cx=650.0, cy=950.0, rad=1500.0, river="north", fill_heights=True),
+         "banpo": dict(file="gangnam", cx=-1950.0, cy=-650.0, rad=1500.0, river="north", fill_heights=True)}
 
 
 def use_area(name):
@@ -78,12 +82,14 @@ def geometry(area=None):
     if area and area != AREA:
         use_area(area)
     name = AREA
-    cache = BUILD / ("_jamsil_geo_v2.npz" if name == "jamsil" else f"_{name}_geo_v1.npz")
+    cache = BUILD / ("_jamsil_geo_v2.npz" if name == "jamsil" else f"_{name}_geo_v2.npz")
     if cache.exists():
         return dict(np.load(cache, allow_pickle=False))
-    z = np.load(ASSETS / "geo" / f"{name}.npz")
+    z = np.load(ASSETS / "geo" / f"{AREAS[name].get('file', name)}.npz")
     has_tower = AREAS[name].get("tower", False)
+    fill_h = AREAS[name].get("fill_heights", False)
     rs = np.random.default_rng(7)
+    rh = np.random.default_rng(11)
     # ── 건물 ──
     bv, bf, bfs, bfid, bvid, bvz = [], [], [], [], [], []
     cent, hts, kinds, fps = [], [], [], []
@@ -95,6 +101,9 @@ def geometry(area=None):
             continue
         h = float(z["b_h"][i])
         area = abs(_area(p))
+        if fill_h and h in (10.0, 25.0):   # building=yes(10m)·commercial(25m) 기본값 → 면적에 맞춘 층수
+            fl = (4.6 if h == 10.0 else 7.5) + 1.1 * math.log(max(area, 40.0) / 200.0) + rh.normal(0, 1.2)
+            h = float(np.clip(round(fl), 2, 16)) * 3.3 + 1.0
         if has_tower and p[:, 0].min() < 0 < p[:, 0].max() and p[:, 1].min() < 0 < p[:, 1].max() and area < 9000:
             tower_idx = len(cent)
             h = TOWER_H
@@ -168,9 +177,9 @@ def geometry(area=None):
         if len(seg_pts) > 1:
             (car_lines if kd == 2 else walk_lines).append(np.array(seg_pts))
     # ── 물·녹지 다각형 ──
-    def polyset(key):
+    def polyset(polys):
         vs, fs, fsz = [], [], []
-        for p in _unpack(z[key + "_pts"], z[key + "_off"]):
+        for p in polys:
             q = _clip_poly(p)
             if len(q) < 3 or abs(_area(q)) < 20:
                 continue
@@ -181,8 +190,16 @@ def geometry(area=None):
             fs.extend(range(base, base + len(q)))
             fsz.append(len(q))
         return np.array(vs, np.float32).reshape(-1, 3), np.array(fs, np.int32), np.array(fsz, np.int32)
-    wv, wf, wfs = polyset("w")
-    gv, gf, gfs = polyset("g")
+    wpolys = _unpack(z["w_pts"], z["w_off"])
+    side = AREAS[name].get("river")
+    if side and "wb_pts" in z:
+        # 자료 범위 밖으로 이어지는 강둑(열린 선) → 물 쪽으로 멀리 닫아 다각형, 원판을 지나는 것만
+        far = 2e4 if side == "north" else -2e4
+        for p in _unpack(z["wb_pts"], z["wb_off"]):
+            if _in_disc(p).any():
+                wpolys.append(np.vstack([p, [[p[-1, 0], far], [p[0, 0], far]]]).astype(np.float32))
+    wv, wf, wfs = polyset(wpolys)
+    gv, gf, gfs = polyset(_unpack(z["g_pts"], z["g_off"]))
     # ── 나무: 녹지 안 무작위 + 보도 옆 가로수 ──
     trees = []
     gpolys = [_clip_poly(p) for p in _unpack(z["g_pts"], z["g_off"])]
