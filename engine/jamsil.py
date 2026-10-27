@@ -82,7 +82,7 @@ def geometry(area=None):
     if area and area != AREA:
         use_area(area)
     name = AREA
-    cache = BUILD / ("_jamsil_geo_v2.npz" if name == "jamsil" else f"_{name}_geo_v2.npz")
+    cache = BUILD / f"_{name}_geo_v3.npz"
     if cache.exists():
         return dict(np.load(cache, allow_pickle=False))
     z = np.load(ASSETS / "geo" / f"{AREAS[name].get('file', name)}.npz")
@@ -242,6 +242,16 @@ def geometry(area=None):
         keep[s0:s0 + 1500] = ~(dd < rwid[None, :] * 0.5 + 6.0).any(1)
     trees = np.array(list(trees) + list(street[keep]), np.float32).reshape(-1, 2)
     trees = trees[_in_disc(trees, 10)]
+    # 물 위 나무 제거 (호수를 덮는 공원 다각형 안에 뿌려진 것)
+    s0 = 0
+    for n in wfs:
+        q = wv[wf[s0:s0 + n], :2]
+        s0 += n
+        x, y = trees[:, 0:1], trees[:, 1:2]
+        xi, yi = q[None, :, 0], q[None, :, 1]
+        xj, yj = np.roll(xi, 1, 1), np.roll(yi, 1, 1)
+        wet = (((yi > y) != (yj > y)) & (x < (xj - xi) * (y - yi) / (yj - yi + 1e-9) + xi)).sum(1) % 2 == 1
+        trees = trees[~wet]
     # 건물 안 나무 제거 (중심 기준 대략)
     cent_a = np.array(cent, np.float32)
     if len(trees) and len(cent_a):
@@ -340,7 +350,8 @@ class Jamsil:
         rd = bpy.data.objects["roads"].data
         rd.attributes.new("rk", "FLOAT", "FACE").data.foreach_set("value", geo["rkind"].astype(np.float32))
         if len(geo["wv"]):
-            w = self._mesh("water", geo["wv"] + np.array([0, 0, 0.05], np.float32), geo["wf"], geo["wfs"],
+            # 물은 녹지(0.06)보다 위: 호수를 통째로 덮는 공원 다각형에 가려지지 않게
+            w = self._mesh("water", geo["wv"] + np.array([0, 0, 0.08], np.float32), geo["wf"], geo["wfs"],
                            K.mat_water("m_jwater", color=(0.03, 0.10, 0.18), rough=0.06))
             w.location.z = 0.0
         if len(geo["gv"]):
