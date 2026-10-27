@@ -72,6 +72,11 @@ jobs:
             for i in 1 2 3 4; do timeout 150 sudo apt-get install -y -qq --no-install-recommends libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null && break || timeout 150 sudo apt-get update -qq || sleep 10; done
           fi
           for i in 1 2 3; do timeout 240 pip install -q numpy pillow opencv-python-headless OpenEXR && break || sleep 15; done
+          # apt가 실패해 ffmpeg가 없으면 pip 정적 빌드로 대신 (렌더 30분 뒤 post에서 죽지 않게)
+          if ! command -v ffmpeg > /dev/null; then
+            pip install -q imageio-ffmpeg && sudo ln -sf "$(python -c 'import imageio_ffmpeg as f; print(f.get_ffmpeg_exe())')" /usr/local/bin/ffmpeg
+          fi
+          ffmpeg -version | head -1
           nproc; free -g | head -2
       - name: sim
         run: python -m engine.run sim ${{ matrix.ep }}
