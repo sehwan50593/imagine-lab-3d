@@ -40,7 +40,7 @@ jobs:
   render:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    timeout-minutes: 350
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -58,11 +58,12 @@ jobs:
       - if: steps.bl.outputs.cache-hit != 'true'
         run: curl -sSL -o ~/blender.tar.xz "https://download.blender.org/release/Blender4.2/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
       - name: deps
+        timeout-minutes: 12
         run: |
           mkdir -p ~/blender && tar -xJf ~/blender.tar.xz -C ~/blender --strip-components=1
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null
-          pip install -q numpy pillow opencv-python-headless OpenEXR
+          for i in 1 2 3; do timeout 240 sudo apt-get update -qq && break || sleep 15; done
+          for i in 1 2 3; do timeout 300 sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null && break || sleep 15; done
+          for i in 1 2 3; do timeout 240 pip install -q numpy pillow opencv-python-headless OpenEXR && break || sleep 15; done
           nproc; free -g | head -2
       - name: sim
         run: python -m engine.run sim ${{ matrix.ep }}
@@ -95,9 +96,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
+        timeout-minutes: 12
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fluidsynth fluid-soundfont-gm > /dev/null
+          for i in 1 2 3; do timeout 240 sudo apt-get update -qq && break || sleep 15; done
+          for i in 1 2 3; do timeout 300 sudo apt-get install -y -qq ffmpeg fluidsynth fluid-soundfont-gm > /dev/null && break || sleep 15; done
           pip install -q numpy
       - uses: actions/download-artifact@v4
         with:
