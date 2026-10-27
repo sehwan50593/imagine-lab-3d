@@ -1,0 +1,114 @@
+name: render
+on:
+  workflow_dispatch:
+    inputs:
+      episodes:
+        description: "all 또는 쉼표로 구분한 에피소드 (ep01_cats,...)"
+        default: "all"
+      mode:
+        description: "preview 또는 full"
+        default: "preview"
+      chunks:
+        description: "full 모드에서 에피소드당 병렬 조각 수"
+        default: "3"
+      step:
+        description: "preview 프레임 간격"
+        default: "60"
+      pct:
+        description: "렌더 해상도 % (1080x1920 기준)"
+        default: "67"
+      samples:
+        default: "24"
+
+env:
+  BLENDER_VERSION: "4.2.23"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      eps: ${{ steps.p.outputs.eps }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q numpy
+      - id: p
+        run: python -m engine.run plan --gh --episodes "${{ inputs.episodes }}" --chunks ${{ inputs.chunks }} --mode ${{ inputs.mode }} --step ${{ inputs.step }} >> "$GITHUB_OUTPUT"
+
+  render:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: bl
+        with:
+          path: ~/blender.tar.xz
+          key: blender-${{ env.BLENDER_VERSION }}
+      - if: steps.bl.outputs.cache-hit != 'true'
+        run: curl -sSL -o ~/blender.tar.xz "https://download.blender.org/release/Blender4.2/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+      - name: deps
+        run: |
+          mkdir -p ~/blender && tar -xJf ~/blender.tar.xz -C ~/blender --strip-components=1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6 libice6 libegl1 ffmpeg > /dev/null
+          pip install -q numpy pillow opencv-python-headless OpenEXR
+          nproc; free -g | head -2
+      - name: sim
+        run: python -m engine.run sim ${{ matrix.ep }}
+      - name: render
+        run: |
+          ~/blender/blender -b --factory-startup --python-exit-code 1 -P engine/blender_main.py -- \
+            --ep ${{ matrix.ep }} --frames "${{ matrix.frames }}" --out build/${{ matrix.ep }}/frames \
+            --pct ${{ inputs.pct }} --samples ${{ inputs.samples }} --device CPU 2>&1 | grep -E "^\[|Error|Traceback|line [0-9]+" || true
+          test -f build/${{ matrix.ep }}/frames/anchors.json
+      - name: post (full)
+        if: inputs.mode == 'full'
+        run: python -m engine.run post ${{ matrix.ep }} --frames "${{ matrix.frames }}" --out out/${{ matrix.ep }}_${{ matrix.part }}.mp4
+      - name: post (preview)
+        if: inputs.mode == 'preview'
+        run: python -m engine.run preview ${{ matrix.ep }} --frames "${{ matrix.frames }}" --out out/preview_${{ matrix.ep }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.mode }}-${{ matrix.ep }}-${{ matrix.part }}
+          path: out/
+          retention-days: 5
+
+  assemble:
+    needs: [plan, render]
+    if: inputs.mode == 'full'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ep: ${{ fromJson(needs.plan.outputs.eps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fluidsynth fluid-soundfont-gm > /dev/null
+          pip install -q numpy
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: full-${{ matrix.ep }}-*
+          path: chunks
+          merge-multiple: true
+      - run: python -m engine.run music ${{ matrix.ep }}
+      - run: |
+          mkdir -p final
+          python -m engine.run assemble ${{ matrix.ep }} --chunks $(ls chunks/*.mp4 | sort -V) --out final/${{ matrix.ep }}.mp4
+          ffprobe -v error -show_entries format=duration -of csv=p=0 final/${{ matrix.ep }}.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-${{ matrix.ep }}
+          path: final/
+          retention-days: 14
