@@ -113,6 +113,9 @@ def cmd_plan(a):
             if s <= t:
                 jobs.append({"ep": e, "part": i, "frames": f"{s}-{t}", "pct": rd["pct"], "samples": rd["samples"],
                              "bounces": rd["bounces"]})
+    if a.only:   # "ep04_ice:3,ep06_onenation:2" 처럼 다시 그릴 조각만
+        want = {tuple(x.strip().split(":")) for x in a.only.split(",") if x.strip()}
+        jobs = [j for j in jobs if (j["ep"], str(j["part"])) in want]
     if a.gh:
         print("matrix=" + json.dumps({"include": jobs}))
         print("eps=" + json.dumps(eps))
@@ -155,6 +158,7 @@ def main():
     p.add_argument("--mode", default="full")
     p.add_argument("--step", type=int, default=60)
     p.add_argument("--gh", action="store_true")
+    p.add_argument("--only", default="")
     p = sp.add_parser("blender")
     p.add_argument("ep")
     p.add_argument("--frames", default="0")

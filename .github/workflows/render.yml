@@ -14,6 +14,12 @@ on:
       step:
         description: "preview 프레임 간격"
         default: "60"
+      only:
+        description: "이 조각만 렌더 (ep04_ice:3,ep06_onenation:2), 비우면 전부"
+        default: ""
+      reuse_run:
+        description: "나머지 조각을 가져올 이전 실행 번호"
+        default: ""
 
 env:
   BLENDER_VERSION: "4.2.23"
@@ -35,7 +41,7 @@ jobs:
         run: curl -sSL -o ~/blender.tar.xz "https://download.blender.org/release/Blender4.2/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
       - run: pip install -q numpy
       - id: p
-        run: python -m engine.run plan --gh --episodes "${{ inputs.episodes }}" --chunks ${{ inputs.chunks }} --mode ${{ inputs.mode }} --step ${{ inputs.step }} >> "$GITHUB_OUTPUT"
+        run: python -m engine.run plan --gh --episodes "${{ inputs.episodes }}" --chunks ${{ inputs.chunks }} --mode ${{ inputs.mode }} --step ${{ inputs.step }} --only "${{ inputs.only }}" >> "$GITHUB_OUTPUT"
 
   render:
     needs: plan
@@ -102,6 +108,14 @@ jobs:
         run: |
           for i in 1 2 3 4; do timeout 150 sudo apt-get install -y -qq --no-install-recommends ffmpeg fluidsynth fluid-soundfont-gm > /dev/null && break || timeout 150 sudo apt-get update -qq || sleep 10; done
           pip install -q numpy
+      - if: inputs.reuse_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: full-${{ matrix.ep }}-*
+          path: chunks
+          merge-multiple: true
+          run-id: ${{ inputs.reuse_run }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           pattern: full-${{ matrix.ep }}-*
