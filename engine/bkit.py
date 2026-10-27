@@ -741,7 +741,7 @@ def load_image(path, non_color=False):
     return img
 
 
-def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
+def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128, ice_regions=None, night=None,
           ocean=(0.03, 0.12, 0.30), land=(0.10, 0.30, 0.30), land_hi=(0.30, 0.36, 0.30)):
     """등장방형 텍스처 기반 지구. ctl: 'sea'(해수면 m), 'ice'(얼음 남은 비율), 'borders'(국경 표시 비율)."""
     bm = bmesh.new()
@@ -768,11 +768,24 @@ def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
         depth = math_node(nt, "DIVIDE", math_node(nt, "SUBTRACT", sea, e_m), 5000.0, clamp=True)
         oc = mix_rgb(nt, depth, (0.06, 0.26, 0.46), ocean)
         base = mix_rgb(nt, is_land, oc, lc)
-        rough = math_node(nt, "MULTIPLY_ADD", is_land, 0.45, 0.22)
+        rough = math_node(nt, "MULTIPLY_ADD", is_land, 0.35, 0.5)
     else:
         base = rgb(nt, ocean)
         rough = 0.3
-    if ice:
+    if ice_regions:
+        ii = nt.nodes.new("ShaderNodeTexImage")
+        ii.image = load_image(ice_regions, True)
+        ln(nt, uv, ii.inputs["Vector"])
+        sp = nt.nodes.new("ShaderNodeSeparateColor")
+        ln(nt, ii.outputs["Color"], sp.inputs[0])
+        icef = None
+        for chn, nm in (("Red", "ice_ant"), ("Green", "ice_gre"), ("Blue", "ice_arc")):
+            v = math_node(nt, "GREATER_THAN", sp.outputs[chn], math_node(nt, "SUBTRACT", 1.0, ctx.ctl_node(nt, nm, 1.0)))
+            v = math_node(nt, "MULTIPLY", v, math_node(nt, "GREATER_THAN", sp.outputs[chn], 0.001))
+            icef = v if icef is None else math_node(nt, "MAXIMUM", icef, v)
+        base = mix_rgb(nt, icef, base, (0.86, 0.92, 1.0))
+        rough = math_node(nt, "MULTIPLY_ADD", icef, 0.3, rough) if not isinstance(rough, float) else rough
+    elif ice:
         ii = nt.nodes.new("ShaderNodeTexImage")
         ii.image = load_image(ice, True)
         ln(nt, uv, ii.inputs["Vector"])
@@ -791,7 +804,18 @@ def globe(ctx, radius=4.0, tex=None, elev=None, ice=None, borders=None, seg=128,
         bl = math_node(nt, "MULTIPLY", has, alive)
         emit = (1.0, 0.75, 0.3)
         estr = math_node(nt, "MULTIPLY", bl, ctx.ctl_node(nt, "borders_glow", 3.0))
-    b = principled(nt, base, rough, emit=emit, estr=estr, coat=0.35)
+    if night:
+        ni = nt.nodes.new("ShaderNodeTexImage")
+        ni.image = load_image(night)
+        ln(nt, uv, ni.inputs["Vector"])
+        nstr = ctx.ctl_node(nt, "night_lights", 0.0)
+        if emit is None:
+            emit = ni.outputs["Color"]
+            estr = math_node(nt, "MULTIPLY", nstr, 3.0)
+        else:
+            emit = mix_rgb(nt, 0.5, emit if not isinstance(emit, tuple) else rgb(nt, emit), ni.outputs["Color"], "ADD")
+            estr = math_node(nt, "ADD", estr, math_node(nt, "MULTIPLY", nstr, 3.0))
+    b = principled(nt, base, rough, emit=emit, estr=estr, coat=0.08, spec=0.35)
     ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
     m.cycles.emission_sampling = "NONE"
     ob = mesh_obj("globe", bm, m, smooth=True)
@@ -874,3 +898,77 @@ def configure(scene, pct=67, samples=24, device="CPU", fast=False, bounces=4):
                 continue
     else:
         c.device = "CPU"
+
+
+# ───────────────────────── 지형(높이맵) ─────────────────────────
+def grid_mesh(name, X, Y, Z, mat=None, skirt_z=None):
+    """X, Y, Z: (ny, nx) 배열 → 사각 격자 메시 (+ 옆면 치마)."""
+    ny, nx = Z.shape
+    co = np.stack([X, Y, Z], -1).reshape(-1, 3).astype(np.float32)
+    idx = np.arange(nx * ny).reshape(ny, nx)
+    q = np.stack([idx[:-1, :-1], idx[1:, :-1], idx[1:, 1:], idx[:-1, 1:]], -1).reshape(-1, 4)
+    polys = [q]
+    if skirt_z is not None:
+        ring = np.concatenate([idx[0, :], idx[1:, -1], idx[-1, -2::-1], idx[-2:0:-1, 0]])
+        base = len(co) + np.arange(len(ring))
+        bot = co[ring].copy()
+        bot[:, 2] = skirt_z
+        co = np.concatenate([co, bot])
+        nxt = np.roll(np.arange(len(ring)), -1)
+        polys.append(np.stack([ring, ring[nxt], base[nxt], base], -1))
+    quads = np.concatenate(polys)
+    me = bpy.data.meshes.new(name)
+    me.vertices.add(len(co))
+    me.vertices.foreach_set("co", co.ravel())
+    me.loops.add(len(quads) * 4)
+    me.loops.foreach_set("vertex_index", quads.ravel().astype(np.int32))
+    me.polygons.add(len(quads))
+    me.polygons.foreach_set("loop_start", (np.arange(len(quads)) * 4).astype(np.int32))
+    me.polygons.foreach_set("loop_total", np.full(len(quads), 4, np.int32))
+    me.update(calc_edges=True)
+    me.validate()
+    if mat:
+        me.materials.append(mat)
+    ob = bpy.data.objects.new(name, me)
+    return link(ob)
+
+
+def box_obj(name, x0, x1, y0, y1, z0, z1, mat=None):
+    bm = bm_cube(x1 - x0, y1 - y0, z1 - z0, ((x0 + x1) / 2, (y0 + y1) / 2, z0), bottom=True)
+    return mesh_obj(name, bm, mat)
+
+
+def mat_terrain(ctx, exag, name="m_terrain", snow=2200.0, seabed=(0.36, 0.36, 0.22)):
+    """현재 해수면(ctl 'sea_m') 기준 고도별 색. 위치 z / exag = 미터."""
+    m, nt, out = new_mat(name)
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    ln(nt, geo.outputs["Position"], sep.inputs[0])
+    meters = math_node(nt, "DIVIDE", sep.outputs["Z"], exag)
+    above = math_node(nt, "SUBTRACT", meters, ctx.ctl_node(nt, "sea_m", 0.0))
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ln(nt, math_node(nt, "DIVIDE", above, snow, clamp=True), ramp.inputs[0])
+    e = ramp.color_ramp.elements
+    e[0].position, e[0].color = 0.0, (0.16, 0.30, 0.10, 1)
+    e[1].position, e[1].color = 1.0, (0.92, 0.93, 0.95, 1)
+    for pos, c in ((0.08, (0.22, 0.38, 0.12)), (0.3, (0.36, 0.40, 0.20)), (0.6, (0.42, 0.34, 0.25)),
+                   (0.85, (0.55, 0.50, 0.46))):
+        el = e.new(pos)
+        el.color = (*c, 1)
+    # 원래 바다 밑이던 땅(빙하기 노출) 표시
+    was_sea = math_node(nt, "LESS_THAN", meters, -2.0)
+    col = mix_rgb(nt, math_node(nt, "MULTIPLY", was_sea, 0.55), ramp.outputs["Color"], seabed)
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 18.0
+    col = mix_rgb(nt, 0.12, col, noise.outputs["Color"], "OVERLAY")
+    b = principled(nt, col, 0.85)
+    ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
+    return m
+
+
+def mat_water(name="m_water", color=(0.02, 0.09, 0.2), rough=0.08, emit=0.0):
+    m, nt, out = new_mat(name)
+    b = principled(nt, color, rough, spec=0.6, emit=(0.05, 0.2, 0.45) if emit else None, estr=emit)
+    ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
+    m.cycles.emission_sampling = "NONE"
+    return m

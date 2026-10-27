@@ -115,11 +115,11 @@ def title_img(beat, big_text):
     lines = []
     if beat.label:
         lines.append((beat.label, 62, 800, beat.label_color, 5))
-    if big_text:
-        lines.append((big_text, beat.big_size, 900, beat.big_color, 7))
     if beat.title:
         for ln in beat.title.split("\n"):
             lines.append((ln, beat.title_size, 850, "white", 6))
+    if big_text:
+        lines.append((big_text, beat.big_size, 900, beat.big_color, 7))
     if beat.note:
         lines.append((beat.note, 44, 700, beat.note_color, 4))
     if not lines:
@@ -180,6 +180,12 @@ class Overlay:
     def draw(self, img, t, anchors):
         ep = self.ep
         beats = ep.BEATS
+        # 장면 전환 번쩍임
+        for tc, dur, c in getattr(ep, "FLASH", []):
+            a = max(0.0, 1.0 - abs(t - tc) / dur)
+            if a > 0:
+                img *= (1 - a)
+                img += np.array(c, np.float32) * a
         # 3D 위치에 붙는 라벨 (말풍선·도시 이름 등)
         if hasattr(ep, "labels"):
             for lb in ep.labels(t, anchors, self.sim):
@@ -213,7 +219,7 @@ class Overlay:
             if im is not None:
                 a = block_alpha(t, b.t0, b.t1, fin, fout)
                 pop = 1.0 if fin == 0 else 0.94 + 0.06 * smooth((t - b.t0) / 0.32)
-                top = (LABEL_Y if b.label else (BIG_Y if big else TITLE_Y)) - 62
+                top = 300 if b.label else 318
                 paste(img, im, W / 2, top + im.height / 2 - 18, a, pop)
             if b.sub:
                 fin = 0 if (self._same(prev, b, "sub") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25

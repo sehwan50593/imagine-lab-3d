@@ -75,3 +75,33 @@ def save_rgb(path, rgb_lin):
 def planet_textures(build_dir):
     save_rgb(build_dir / "earth_day.png", earth_day())
     save_rgb(build_dir / "earth_night.png", city_lights())
+
+
+def ice_regions(path, w=4096, h=2048, seed=4):
+    """R=남극 빙상, G=그린란드·산악빙하, B=북극 해빙. 값 = 가장자리→안쪽 깊이(녹는 순서)."""
+    land, ice = land_ice(w, h)
+    lat = np.linspace(90, -90, h)[:, None] * np.ones((1, w))
+    lon = np.linspace(-180, 180, w)[None, :] * np.ones((h, 1))
+    out = np.zeros((h, w, 3), np.float32)
+    for ch, m in ((0, (ice > 0.5) & (lat < -60)), (1, (ice > 0.5) & (lat >= -60))):
+        mm = m.astype(np.uint8)
+        d = cv2.distanceTransform(mm, cv2.DIST_L2, 5).astype(np.float32)
+        if d.max() > 0:
+            d = np.sqrt(d / np.percentile(d[m], 97))
+        rs = np.random.default_rng(seed + ch)
+        noise = cv2.GaussianBlur(rs.random((h // 8, w // 8)).astype(np.float32), (0, 0), 2)
+        noise = cv2.resize(noise, (w, h)) - 0.5
+        out[..., ch] = np.where(m, np.clip(0.05 + 0.9 * d + 0.25 * noise, 0.02, 1.0), 0)
+    # 북극 해빙 (9월 최소 범위 근처를 흉내 낸 원판)
+    rs = np.random.default_rng(seed + 9)
+    edge = 78 + 3.0 * np.sin(np.radians(lon) * 3 + 0.7) + 2.0 * np.sin(np.radians(lon) * 7 + 2.1)
+    arc = (lat > edge) & (land < 0.5)
+    depth = np.clip((lat - edge) / (90 - edge), 0, 1)
+    out[..., 2] = np.where(arc, 0.05 + 0.95 * depth, 0)
+    imwrite(path, (np.clip(out[..., ::-1], 0, 1) * 255 + 0.5).astype(np.uint8))
+    return path
+
+
+def eastasia():
+    z = np.load(ASSETS / "geo" / "eastasia_elev_1m.npz")
+    return z["elev"].astype(np.float32), float(z["lat_top"]), float(z["lon_left"]), float(z["cell"])
