@@ -14,6 +14,7 @@ from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose
 
 DUR = 56.0
 META = {"id": "ep09", "title": "만약 AI가 세상을 지배한다면?", "duration": DUR,
+        "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
         "music": {"key": "A", "mode": "lydian", "bpm": 72, "seed": 99, "twist_at": 40.0}}
 NP, NC, ND, NDC = 620, 120, 70, 8
 

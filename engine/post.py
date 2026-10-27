@@ -166,6 +166,7 @@ def load_anchors(in_dir):
 
 def run(ep, sim, frames, in_dir, out, preview=False):
     in_dir, out = Path(in_dir), Path(out)
+    (out if preview else out.parent).mkdir(parents=True, exist_ok=True)
     ov = Overlay(ep, sim)
     anchors, cams = load_anchors(in_dir)
     grade = getattr(ep, "GRADE", {})

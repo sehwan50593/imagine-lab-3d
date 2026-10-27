@@ -17,6 +17,7 @@ from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, lines_of, people_co
 
 DUR = 56.0
 META = {"id": "ep03", "title": "만약 이 세상에서 법이 사라진다면?", "duration": DUR,
+        "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
         "music": {"key": "E", "mode": "major", "bpm": 70, "seed": 33, "twist_at": 46.0}}
 C = np.array([-214.4, 61.7])
 NP, NC, NPOL, NFIRE = 640, 150, 6, 40

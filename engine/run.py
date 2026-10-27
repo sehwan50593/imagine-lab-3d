@@ -21,7 +21,7 @@ from .common import BUILD, FPS, ROOT, frames_of
 
 
 def episodes_all():
-    return sorted(p.stem for p in (ROOT / "episodes").glob("ep[0-9][0-9]_*.py"))
+    return sorted(p.stem for p in (ROOT / "episodes").glob("ep[0-9][0-9]_*.py") if not p.stem.startswith("ep00"))
 
 
 def load_ep(name):
@@ -82,6 +82,7 @@ def cmd_assemble(a):
     lst.write_text("".join(f"file '{Path(c).resolve().as_posix()}'\n" for c in a.chunks), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy",
                     str(d / "video.mp4")], check=True)
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     music = d / "music.m4a"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / "video.mp4"), "-i", str(music), "-map", "0:v",
                     "-map", "1:a", "-c:v", "copy", "-c:a", "copy", "-shortest", "-movflags", "+faststart",
@@ -93,16 +94,20 @@ def cmd_plan(a):
     eps = episodes_all() if a.episodes == "all" else [e.strip() for e in a.episodes.split(",")]
     jobs = []
     for e in eps:
-        n = frames_of(load_ep(e).META["duration"])
+        meta = load_ep(e).META
+        n = frames_of(meta["duration"])
+        rd = {"pct": 67, "samples": 10, "bounces": 2, "chunks": a.chunks}
+        rd.update(meta.get("render", {}))
         if a.mode == "preview":
-            jobs.append({"ep": e, "part": 0, "frames": f"0-{n - 1}:{a.step}"})
+            jobs.append({"ep": e, "part": 0, "frames": f"0-{n - 1}:{a.step}", "pct": 40, "samples": 6, "bounces": 2})
             continue
-        k = max(1, a.chunks)
+        k = max(1, int(rd["chunks"]))
         size = (n + k - 1) // k
         for i in range(k):
             s, t = i * size, min(n, (i + 1) * size) - 1
             if s <= t:
-                jobs.append({"ep": e, "part": i, "frames": f"{s}-{t}"})
+                jobs.append({"ep": e, "part": i, "frames": f"{s}-{t}", "pct": rd["pct"], "samples": rd["samples"],
+                             "bounces": rd["bounces"]})
     if a.gh:
         print("matrix=" + json.dumps({"include": jobs}))
         print("eps=" + json.dumps(eps))

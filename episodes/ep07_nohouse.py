@@ -14,6 +14,7 @@ from engine.jamsil_ep import CAR_COLORS, crowd, light_keys, people_colors, pose_
 
 DUR = 56.0
 META = {"id": "ep07", "title": "만약 세상의 모든 집이 사라진다면?", "duration": DUR,
+        "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
         "music": {"key": "Bb", "mode": "major", "bpm": 66, "seed": 7, "twist_at": 40.0}}
 FOCUS = np.array([-1500.0, -600.0])
 NR, NW, NC, NT = 900, 260, 90, 160

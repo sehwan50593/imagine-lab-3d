@@ -14,6 +14,7 @@ from engine.jamsil_ep import (CAR_COLORS, crowd, light_keys, people_colors, pose
 
 DUR = 56.0
 META = {"id": "ep10", "title": "만약 고디바 모찌가 전 세계적인 열풍이 된다면?", "duration": DUR,
+        "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
         "music": {"key": "Ab", "mode": "major", "bpm": 76, "seed": 10, "twist_at": 45.0}}
 NQ, NW, NC = 330, 520, 120
 ROWS = [((-60.0, -61.0), (8.0, -61.0)), ((8.0, -67.0), (-60.0, -67.0)), ((-60.0, -73.0), (8.0, -73.0))]
