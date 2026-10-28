@@ -1,54 +1,57 @@
-"""EP05 만약 남한과 북한이 전쟁을 한다면? (가상 시나리오, 남측 선제공격으로 시작)
+"""EP05 만약 남한과 북한이 전쟁을 한다면? (가상 시나리오) — 10-28 장면형 개편
 
+공격 → 방어 → 동맹 → 북진 → 변수 → 결과를 장면마다 8초씩, 한 단계에 한 가지 원리만 보여준다.
 실제로 계산하는 것:
-- NOAA ETOPO1 한반도 지형 + Natural Earth 군사분계선(남북 공유 경계) + 도시 인구로 만든 야경
-- 미사일·포탄: 발사 시각·탄도(포물선)·착탄 → 섬광·화재 누적 (발사 수는 시간대별 확률)
-- 전력망: 착탄이 쌓일수록 도시 불빛이 꺼짐 / 피란 흐름: 수도권에서 남쪽 도시로 이동하는 입자
-숫자는 모두 공개 자료(2022 국방백서, RAND 2020, 미 의회조사국 2017, TrendForce 2026, PRIO, 국립생태원).
+- NOAA ETOPO1 한반도 지형 + Natural Earth 군사분계선 + 도시 인구로 만든 야경
+- 장사정포 진지(48곳)마다 사격 일정 → 포탄 궤적(꼬리)·착탄·화재. 살아남은 진지 수만큼만 쏜다
+- 탄도미사일은 패트리엇·천궁 포대에서 요격탄이 떠서 공중에서 만남(요격률 가정 80%)
+- K9 대포병 사격·전투기 폭격이 진지를 하나씩 지움 → 서울로 오는 포탄이 줄어듦
+- 항공모함 전단 이동, 전투기 비행, 전선(북진), 국경을 넘는 중국군 입자
+숫자: 2022 국방백서(한국군 50만·북한군 128만), 주한미군 약 2.85만, 미 의회조사국 R44994(2017).
 """
-from engine.cuts import snap
 import json
 import math
 
 import numpy as np
 
-from engine.common import ASSETS, FPS, Beat, clamp, frames_of, keyed, ramp
+from engine.common import ASSETS, FPS, Beat, frames_of, keyed, ramp
 
 DUR = 56.0
 META = {"id": "ep05", "title": "만약 남한과 북한이 전쟁을 한다면?", "duration": DUR,
         "music": {"key": "C", "mode": "major", "bpm": 64, "seed": 25, "twist_at": 44.0}}
+STYLE = "bench"
 S = 1.6
 EXAG = 0.00032
 LAT0, LON0 = 38.0, 127.5
 BOX = (33.0, 43.2, 124.0, 131.0)  # 위도, 경도 범위
-NSHELL, NIMP, NFIRE, NREF, NLIFE = 220, 260, 420, 420, 320
+NART, NK9, NBAT, NTK, NFR = 48, 24, 6, 30, 110
+TRAIL = 6
+NPT, NFL, NFIRE, NJET, NSHIP, NCH = 1500, 320, 700, 26, 6, 170
+RED, BLUE = (1.0, 0.32, 0.12), (0.35, 0.72, 1.0)
 
 BEATS = [
-    Beat(0.0, 4.5, badge="가상 시나리오", title="남북 전쟁이 일어난다면?", note="한국군 50만 · 북한군 128만 (2022 국방백서)",
-         sub="남측의 선제공격(북침)으로\n전쟁이 시작된다면?"),
-    Beat(4.5, 10.0, badge="D-DAY 04:00", title="{blue}선제 타격{/}",
-         sub="미사일이 휴전선 북쪽의\n장사정포 진지를 먼저 노립니다."),
-    Beat(10.0, 16.0, badge="04:05", title="{red}장사정포{/} 반격", note="야포 8,800문 · 방사포 5,500문 (2022 국방백서)",
-         sub="살아남은 포가 휴전선 너머\n서울을 향해 일제히 불을 뿜습니다."),
-    Beat(16.0, 22.0, badge="05:00", title="서울까지 약 50km", big="사상자 최대 20.6만", big_size=96, big_color="red",
-         note="장사정포 1시간 사격 시나리오 (RAND, 2020)",
-         sub="수도권 2,608만 명, 인구의 절반 이상이\n포의 사거리 안에 삽니다."),
-    Beat(22.0, 28.0, badge="D+3", title="첫 며칠 사망 {red}3만~30만{/}", note="재래식 무기만 썼을 때 추정 (미 의회조사국, 2017)",
-         sub="불이 꺼진 도시에서 사람들은\n남쪽으로 피란길에 오릅니다."),
-    Beat(28.0, 34.0, badge="D+7", title="세계가 멈춘다", big="D램 64%", big_size=104, big_color="orange",
-         note="삼성·SK하이닉스 세계 점유율 (TrendForce, 2026)",
-         sub="스마트폰과 서버에 들어가는 메모리의\n절반 이상을 만드는 곳이 멈춥니다."),
-    Beat(34.0, 39.5, badge="1950년의 기억", title="한국전쟁 사망자", big="약 300만 명", big_size=104,
-         note="추정 범위 150만~450만 (PRIO)",
-         sub="70여 년 전, 같은 땅에서\n이미 일어났던 일입니다."),
-    Beat(39.5, 44.0, badge="결과", title="시뮬레이션 결과: {red}승자 없음{/}",
-         sub="어느 쪽이 이겨도\n피해는 한반도 전체에 남습니다."),
-    Beat(44.0, 52.0, badge="반전", title="전쟁이 멈춘 땅의 {green}기적{/}",
-         note="DMZ 일원 약 6,900종 · 국내 멸종위기종의 38% 이상",
-         sub="70년 넘게 사람이 들어가지 못한 DMZ는\n야생동물의 마지막 피난처가 됐습니다."),
-    Beat(52.0, 56.0, badge="정전 73년째", title="이 시뮬레이션은\n{green}영원히 돌리지 않기를{/}", title_size=72),
+    Beat(0.0, 7.0, badge="가상 시나리오", title="남북 전쟁이 일어난다면?",
+         sub="한국군 50만 명, 북한군 128만 명이\n휴전선을 사이에 두고 마주 서 있습니다."),
+    Beat(7.0, 15.0, badge="1단계", title="1단계 {red}장사정포{/} 공격",
+         sub="휴전선 북쪽 산속 진지에서 포탄과 로켓이\n50km 떨어진 서울로 쏟아집니다."),
+    Beat(15.0, 23.0, badge="2단계", title="2단계 {blue}막고, 되쏜다{/}",
+         sub="미사일은 패트리엇·천궁이 공중에서 막고,\n포 진지는 K9 자주포가 찾아내 부숩니다."),
+    Beat(23.0, 31.0, badge="3단계", title="3단계 {blue}미군 합류{/}",
+         sub="주한미군 2만 8천여 명에 더해\n미 항공모함과 전투기가 바다를 건너옵니다."),
+    Beat(31.0, 39.0, badge="4단계", title="4단계 하늘 장악 → {blue}북진{/}",
+         sub="전투기가 먼저 하늘을 잡으면\n지상군이 휴전선을 넘어 북쪽으로 올라갑니다."),
+    Beat(39.0, 47.0, badge="5단계", title="변수: {red}중국{/}",
+         sub="1950년처럼 중국군이 국경을 넘어오면\n전쟁은 다시 길어질 수 있습니다."),
+    Beat(47.0, 52.0, badge="결과", title="이겨도 {red}잃는 것{/}",
+         sub="많은 분석은 한미연합군이 결국 이긴다고 보지만\n첫 며칠에만 3만~30만 명이 숨질 수 있습니다."),
+    Beat(52.0, 56.0, badge="지금", title="이 시뮬레이션은\n{green}영원히 돌리지 않기를{/}", title_size=72,
+         sub="1953년 정전 이후 73년,\n휴전선은 지금도 멈춰 있습니다."),
 ]
-GRADE = {"exposure": 1.05, "bloom": 0.34, "bloom_thr": 0.85, "bloom_radius": 1.2, "vignette": 0.34}
+GRADE = {"exposure": 1.05, "bloom": 0.2, "bloom_thr": 1.0, "bloom_radius": 1.2, "vignette": 0.34}
+# 장면 안에서는 천천히, 장면 사이에서만 시간이 건너뜀 (분, 새벽 4시 기준)
+CLOCK = [(0.0, 0.0), (7.0, 1.0), (7.01, 2.0), (15.0, 10.0), (15.01, 12.0), (23.0, 20.0),
+         (23.01, 1440 + 300.0), (31.0, 2 * 1440 + 600.0), (31.01, 7 * 1440.0), (39.0, 30 * 1440.0),
+         (39.01, 32 * 1440.0), (47.0, 40 * 1440.0)]
 
 
 def fi(t):
@@ -68,14 +71,18 @@ def dmz_line():
         if y > 37.5 and np.min(np.hypot(n[:, 0] - x, n[:, 1] - y)) < 0.01:
             pts.append((x, y))
     pts = np.array(sorted(set(pts)))
-    order = np.argsort(pts[:, 0])
-    return pts[order]
+    return pts[np.argsort(pts[:, 0])]
 
 
-def arc_pos(p0, p1, u, h):
-    p = p0 + (p1 - p0) * u[:, None]
-    z = h * 4 * u * (1 - u)
-    return np.c_[p, z]
+def smooth(x):
+    x = np.clip(x, 0, 1)
+    return x * x * (3 - 2 * x)
+
+
+def orbit(target, az, el, dist):
+    a, e = math.radians(az), math.radians(el)
+    t = np.asarray(target, np.float32)
+    return t + np.array([math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)], np.float32) * dist
 
 
 def simulate(build_dir):
@@ -95,13 +102,17 @@ def simulate(build_dir):
     Z = np.maximum(e, -300.0) * EXAG
 
     def hz(xy):
-        """지형 높이(가장 가까운 격자) — 선·입자를 땅 위에 얹기."""
+        """지형 높이(가장 가까운 격자) — 부대·불을 땅 위에 얹기."""
         xy = np.asarray(xy, np.float32)
         lat = LAT0 + xy[..., 1] / S
         lon = LON0 + xy[..., 0] / (S * math.cos(math.radians(LAT0)))
         r = np.clip(np.round((lats[0] - lat) / cell), 0, len(lats) - 1).astype(int)
         c = np.clip(np.round((lon - lons[0]) / cell), 0, len(lons) - 1).astype(int)
         return np.maximum(Z[r, c], 0.0)
+
+    def on_ground(xy, lift=0.0):
+        xy = np.asarray(xy, np.float32)
+        return np.concatenate([xy, (hz(xy) + lift)[..., None]], -1).astype(np.float32)
 
     # 야경 텍스처 (R=남, G=북, B=주변국)
     cities = json.load(open(ASSETS / "geo" / "cities.json", encoding="utf-8"))
@@ -126,127 +137,287 @@ def simulate(build_dir):
     ts = np.arange(nf) / FPS
     dmz = dmz_line()
     dmz_xy = np.array([to_xy(la, lo) for lo, la in dmz])
+    dmz_x, dmz_y = dmz_xy[:, 0], dmz_xy[:, 1]
     seoul = to_xy(37.5665, 126.978)
-    # 발사 사건: (발사 시각, 출발, 도착, 높이, 색 0=청 1=적)
-    events = []
-    for _ in range(46):  # 선제 타격: 남→북 (진지)
-        t0 = rs.uniform(4.8, 9.6)
-        st = to_xy(rs.uniform(36.9, 37.3), rs.uniform(126.9, 127.6))
-        en = to_xy(rs.uniform(38.15, 38.6), rs.uniform(126.3, 127.6))
-        events.append((t0, st, en, rs.uniform(0.8, 1.2), 0, 1.3))
-    for _ in range(330):  # 장사정포: 휴전선 북쪽 → 수도권
-        t0 = 10.0 + rs.gamma(2.0, 2.2)
-        if t0 > 22.0:
+
+    def dmz_at(x):
+        return np.interp(x, dmz_x, dmz_y)
+
+    # ── 부대 배치 ──
+    ax = rs.uniform(to_xy(38, 126.35)[0], to_xy(38, 127.55)[0], NART)
+    art = np.c_[ax, dmz_at(ax) + rs.uniform(0.08, 0.5, NART)].astype(np.float32)   # 휴전선 북쪽 산속
+    kx = rs.uniform(to_xy(38, 126.7)[0], to_xy(38, 127.4)[0], NK9)
+    k9 = np.c_[kx, np.minimum(dmz_at(kx) - rs.uniform(0.1, 0.3, NK9), seoul[1] + 0.45)].astype(np.float32)
+    bat = (seoul + np.array([[0.25, 0.05], [-0.2, 0.1], [0.05, 0.25], [0.3, -0.2], [-0.25, -0.15], [0.0, -0.3]])
+           ).astype(np.float32)
+    # ── 진지 파괴 시각: K9이 서울에서 가까운 순서로, 남은 건 전투기가 ──
+    order = np.argsort(np.hypot(*(art - seoul).T))
+    kill_t = np.full(NART, 1e9, np.float32)
+    shots = []   # (t0, dur, p0, p1, h, kind, art, 요격 u)  kind: 0 포탄 1 미사일 2 요격탄 3 K9
+    k9_times = np.r_[np.linspace(15.6, 22.6, 28), np.linspace(23.4, 30.0, 10)]
+    for tk, j in zip(k9_times, order[:len(k9_times)]):
+        src = k9[rs.integers(0, NK9)]
+        shots.append((tk, 1.5, src, art[j], 0.32, 3, int(j), 1.0))
+        kill_t[j] = tk + 1.5
+    jet_targets = order[len(k9_times):]
+    # ── 전투기: 항모·평택·남동쪽(일본)에서 출발 → 남은 진지 폭격, 나머지는 북쪽 깊숙이 ──
+    carrier0, carrier1 = to_xy(36.85, 130.95), to_xy(37.35, 130.05)
+    origins = [to_xy(36.97, 127.03), to_xy(33.6, 130.9)]
+    jets = []
+    for i in range(NJET):
+        t0 = rs.uniform(25.5, 37.0)
+        if i < len(jet_targets):
+            j = int(jet_targets[i])
+            tgt = art[j]
+            t0 = rs.uniform(25.5, 31.5)
+        else:
+            j = -1
+            tgt = to_xy(rs.uniform(38.8, 40.0), rs.uniform(125.4, 127.6))
+        o = (carrier0 + (carrier1 - carrier0) * min(1.0, (t0 - 23) / 8)) if i % 3 == 0 else origins[i % 3 - 1]
+        o = np.asarray(o, np.float32)
+        dur = float(np.hypot(*(tgt - o))) / 1.6
+        jets.append((t0, dur, o, np.asarray(tgt, np.float32), j))
+        if j >= 0:
+            kill_t[j] = t0 + dur
+    # ── 북한 사격 일정: 살아 있는 진지만 쏜다 ──
+    for j in range(NART):
+        t = 7.2 + rs.exponential(1.2)
+        while t < min(kill_t[j], 33.0):
+            tgt = seoul + rs.normal(0, 0.16, 2) * np.array([1.3, 1.0])
+            shots.append((t, rs.uniform(2.4, 3.2), art[j], tgt, rs.uniform(0.35, 0.55), 0, -1, 1.0))
+            t += rs.exponential(4.5)
+    # 탄도미사일: 더 북쪽에서 높게 → 2단계부터 80% 요격
+    for i in range(16):
+        t0 = rs.uniform(7.5, 27.0)
+        src = to_xy(rs.uniform(38.9, 39.6), rs.uniform(125.6, 127.2))
+        tgt = seoul + rs.normal(0, 0.12, 2)
+        u_hit = rs.uniform(0.72, 0.82) if (t0 > 13.0 and rs.random() < 0.8) else 1.0
+        shots.append((t0, 3.6, src, tgt, 1.5, 1, -1, u_hit))
+        if u_hit < 1:
+            meet_t = t0 + 3.6 * u_hit
+            b = bat[np.argmin(np.hypot(*(bat - tgt).T))]
+            shots.append((meet_t - 1.1, 1.1, b, (src, tgt, 1.5, u_hit), 0.0, 2, -1, 1.0))
+    shots.sort(key=lambda s: s[0])
+
+    def arc(p0, p1, h, u):
+        u = np.asarray(u, np.float32)
+        p = p0[None] + (p1 - p0)[None] * u[:, None]
+        z0, z1 = hz(p0), hz(p1)
+        return np.c_[p, z0 + (z1 - z0) * u + h * 4 * u * (1 - u)]
+
+    pt_p = np.zeros((nf, NPT, 3), np.float32)
+    pt_s = np.zeros((nf, NPT), np.float32)
+    pt_c = np.zeros((nf, NPT, 3), np.float32)
+    fl_p = np.zeros((nf, NFL, 3), np.float32)
+    fl_s = np.zeros((nf, NFL), np.float32)
+    fl_c = np.zeros((nf, NFL, 3), np.float32)
+    flashes = []    # (t, xyz, 크기, 색)
+    fires = []      # (t, xyz)
+    red_hits, blue_hits = [], []
+    for t0, dur, p0, p1, h, kind, j, uh in shots:
+        if kind == 2:      # 요격: 미사일과 만나는 자리에서 공중 폭발
+            src, tgt, mh, mu = p1
+            flashes.append((t0 + dur, arc(src, tgt, mh, [mu])[0], 1.6, (0.8, 0.9, 1.0)))
             continue
-        st = to_xy(rs.uniform(38.0, 38.45), rs.uniform(126.3, 127.5))
-        en = seoul + rs.normal(0, 0.28, 2) * np.array([1.4, 1.0])
-        events.append((t0, st, en, rs.uniform(0.35, 0.6), 1, 1.0))
-    events.sort(key=lambda e: e[0])
-    events = [(t0, st, en, h, c, d, float(hz(st)), float(hz(en))) for t0, st, en, h, c, d in events]
-    sh_p = np.zeros((nf, NSHELL, 3), np.float32)
-    sh_s = np.zeros((nf, NSHELL), np.float32)
-    sh_c = np.zeros((nf, NSHELL), np.float32)
-    im_p = np.zeros((nf, NIMP, 3), np.float32)
-    im_s = np.zeros((nf, NIMP), np.float32)
-    fires = []
+        if kind == 1 and uh < 1:
+            continue
+        end = arc(p0, p1, h, [1.0])[0]
+        flashes.append((t0 + dur, end + np.array([0, 0, 0.01]), 1.0 if kind == 0 else 1.5,
+                        (1.0, 0.6, 0.3) if kind in (0, 1) else (0.7, 0.85, 1.0)))
+        fires.append((t0 + dur, end))
+        (red_hits if kind in (0, 1) else blue_hits).append(t0 + dur)
+    for t0, dur, o, tgt, j in jets:
+        if j >= 0:
+            e_ = np.r_[tgt, hz(tgt)]
+            flashes.append((t0 + dur, e_ + np.array([0, 0, 0.01]), 1.8, (1.0, 0.75, 0.4)))
+            fires.append((t0 + dur, e_))
+            blue_hits.append(t0 + dur)
+    trail_u = np.arange(TRAIL, dtype=np.float32) * 0.035
+    trail_s = np.linspace(1.0, 0.25, TRAIL).astype(np.float32)
     for i, t in enumerate(ts):
         k = 0
-        m = 0
-        for t0, st, en, h, colr, dur, z0, z1 in events:
+        for t0, dur, p0, p1, h, kind, j, uh in shots:
+            if t < t0 or k + TRAIL > NPT:
+                continue
             u = (t - t0) / dur
-            if 0 <= u < 1 and k < NSHELL:
-                p = arc_pos(st, en, np.array([u]), h)[0]
-                p[2] += z0 + (z1 - z0) * u
-                sh_p[i, k] = p
-                sh_s[i, k] = 1.0
-                sh_c[i, k] = colr
-                k += 1
-            if 1 <= u < 1 + 0.7 / dur and m < NIMP:
-                v = (u - 1) * dur / 0.7
-                im_p[i, m] = (*en, z1 + 0.02)
-                im_s[i, m] = (0.4 + 1.6 * v) * (1 - v) * (1.4 if colr == 0 else 1.0)
+            if kind == 2:
+                if u >= 1:
+                    continue
+                src, tgt, mh, mu = p1
+                meet = arc(src, tgt, mh, [mu])[0]
+                uu = np.clip(u - trail_u * 2, 0, 1)
+                b0 = np.r_[p0, hz(p0)]
+                q = b0[None] + (meet - b0)[None] * uu[:, None]
+                q[:, 2] += 0.15 * np.sin(uu * math.pi)
+                col = BLUE
+            else:
+                if u >= uh:
+                    continue
+                q = arc(p0, p1, h, np.clip(u - trail_u, 0, 1))
+                col = RED if kind in (0, 1) else BLUE
+            pt_p[i, k:k + TRAIL] = q
+            pt_s[i, k:k + TRAIL] = trail_s * (1.6 if kind == 1 else 1.0)
+            pt_c[i, k:k + TRAIL] = col
+            k += TRAIL
+        m = 0
+        for tf, p, sz, c in flashes:
+            v = (t - tf) / 0.6
+            if 0 <= v < 1 and m < NFL:
+                fl_p[i, m] = p
+                fl_s[i, m] = sz * (0.4 + 1.6 * v) * (1 - v)
+                fl_c[i, m] = c
                 m += 1
-    for e_ in events:
-        fires.append((e_[0] + e_[5], e_[2], e_[7]))
-    fires = fires[:NFIRE]
+    fires = sorted(fires, key=lambda f: f[0])[:NFIRE]
     fr_p = np.zeros((NFIRE, 3), np.float32)
     fr_t = np.full(NFIRE, 1e9, np.float32)
-    for j, (tt, en, zz) in enumerate(fires):
-        fr_p[j] = (*(en + rs.normal(0, 0.03, 2)), zz + 0.012)
-        fr_t[j] = tt
-    fire_s = np.clip((ts[:, None] - fr_t[None]) / 0.4, 0, 1) * (1 - ramp_arr(ts, 40.0, 46.0)[:, None] * 0.85)
-    # 도시 전력: 착탄 누적 비율에 따라 감소
-    hit = np.array([sum(1 for e_ in events if e_[4] == 1 and e_[0] + e_[5] <= t) for t in ts], np.float32)
-    hit /= max(hit.max(), 1)
-    south_power = 1.0 - 0.62 * hit
-    strike = np.array([sum(1 for e_ in events if e_[4] == 0 and e_[0] + e_[5] <= t) for t in ts], np.float32)
-    north_power = 1.0 - 0.7 * strike / max(strike.max(), 1)
-    # 피란 입자: 수도권 → 대전·대구·부산·광주
-    dests = [to_xy(36.35, 127.38), to_xy(35.87, 128.6), to_xy(35.18, 129.08), to_xy(35.16, 126.85)]
-    ref_start = seoul + rs.normal(0, 0.25, (NREF, 2))
-    ref_dest = np.array(dests)[rs.integers(0, len(dests), NREF)] + rs.normal(0, 0.15, (NREF, 2))
-    ref_t0 = rs.uniform(22.5, 33.0, NREF)
-    ref_speed = rs.uniform(0.08, 0.14, NREF)
-    ref_p = np.zeros((nf, NREF, 3), np.float32)
-    ref_s = np.zeros((nf, NREF), np.float32)
+    for q, (tt, p) in enumerate(fires):
+        fr_p[q] = p + np.r_[rs.normal(0, 0.02, 2), 0.01]
+        fr_t[q] = tt
+    fire_s = np.clip((ts[:, None] - fr_t[None]) / 0.4, 0, 1) * (1 - 0.8 * smooth((ts[:, None] - 50.0) / 4.0))
+    # 도시 전력: 착탄이 쌓일수록 불이 꺼짐
+    rh = np.searchsorted(np.sort(red_hits), ts) / max(len(red_hits), 1)
+    bh = np.searchsorted(np.sort(blue_hits), ts) / max(len(blue_hits), 1)
+    south = 1.0 - 0.5 * rh
+    north = 1.0 - 0.75 * bh
+    # ── 전투기 위치 ──
+    jt_p = np.zeros((nf, NJET, 3), np.float32)
+    jt_s = np.zeros((nf, NJET), np.float32)
+    jt_r = np.zeros((nf, NJET, 3), np.float32)
+    for q, (t0, dur, o, tgt, j) in enumerate(jets):
+        d = tgt - o
+        u = (ts - t0) / dur
+        jt_p[:, q, :2] = o[None] + d[None] * u[:, None]
+        jt_p[:, q, 2] = 0.42 + 0.05 * np.sin(u * 3)
+        jt_s[:, q] = ((u >= 0) & (u < 1.6)) * np.clip(np.minimum(u * 6 + 0.2, (1.6 - u) * 4), 0, 1)
+        jt_r[:, q, 2] = math.atan2(d[1], d[0])
+    # ── 항모 전단 ──
+    sh_off = np.array([[0, 0], [0.12, 0.15], [-0.1, -0.13], [0.22, -0.05], [-0.2, 0.12], [0.3, 0.2]], np.float32)
+    ship_u = smooth((ts - 23.0) / 8.0)
+    car = carrier0[None] + (carrier1 - carrier0)[None] * ship_u[:, None]
+    sp_p = np.zeros((nf, NSHIP, 3), np.float32)
+    sp_p[:, :, :2] = car[:, None, :] + sh_off[None]
+    sp_s = np.tile(np.array([1.0, 1.0, 0.45, 0.45, 0.45, 0.45], np.float32), (nf, 1)) * \
+        ((ts >= 22.5) & (ts < 47))[:, None]
+    yaw_c = math.atan2(*(carrier1 - carrier0)[::-1])
+    # ── 전선(북진): 휴전선에서 평양 북쪽까지 ──
+    fx0 = np.linspace(dmz_x.min() + 0.02, dmz_x.max() - 0.02, NFR)
+    fstart = np.c_[fx0, dmz_at(fx0)]
+    a_, b_ = to_xy(39.45, 125.15), to_xy(39.2, 127.5)
+    fend = a_[None] + (b_ - a_)[None] * np.linspace(0, 1, NFR)[:, None]
+    fend[:, 1] += 0.06 * np.sin(np.linspace(0, 9, NFR))
+    adv = smooth((ts - 31.6) / 7.0)
+    fr_line = fstart[None] + (fend - fstart)[None] * adv[:, None, None]
+    fl_vis = ((ts >= 31.0) & (ts < 47.0)).astype(np.float32)
+    front = np.zeros((nf, NFR, 3), np.float32)
+    front[:, :, :2] = fr_line
+    front[:, :, 2] = hz(fr_line) + 0.03
+    ti = np.linspace(2, NFR - 3, NTK).astype(int)
+    tanks = np.zeros((nf, NTK, 3), np.float32)
+    tanks[:, :, :2] = fr_line[:, ti] - np.array([0, 0.07])
+    tanks[:, :, 2] = hz(tanks[:, :, :2])
+    fcen = front[:, :, :2].mean(1)
+    # ── 중국 국경을 넘는 입자 (변수) ──
+    yalu = np.array([to_xy(40.1, 124.4), to_xy(40.6, 125.2), to_xy(41.15, 126.3), to_xy(41.4, 127.4),
+                     to_xy(41.7, 128.2)])
+    seg = rs.integers(0, len(yalu) - 1, NCH)
+    w = rs.random(NCH)[:, None]
+    cb = yalu[seg] + (yalu[seg + 1] - yalu[seg]) * w + np.array([0, 0.12])
+    ct0 = rs.uniform(39.6, 45.5, NCH)
+    cv = np.c_[rs.normal(0.05, 0.05, NCH), -rs.uniform(0.09, 0.15, NCH)]
+    ch_p = np.zeros((nf, NCH, 3), np.float32)
+    ch_s = np.zeros((nf, NCH), np.float32)
     for i, t in enumerate(ts):
-        u = np.clip((t - ref_t0) * ref_speed, 0, 1)
-        p = ref_start + (ref_dest - ref_start) * u[:, None]
-        ref_p[i, :, :2] = p
-        ref_p[i, :, 2] = hz(p) + 0.025
-        ref_s[i] = np.where((t > ref_t0) & (u < 1), 1.0, 0.0) * (1 - ramp_arr(np.array([t]), 38.0, 40.0)[0])
-    # DMZ 생명(반딧불처럼): 군사분계선 양옆 2km
-    li = rs.integers(0, len(dmz_xy) - 1, NLIFE)
-    uu = rs.random(NLIFE)
-    base = dmz_xy[li] + (dmz_xy[li + 1] - dmz_xy[li]) * uu[:, None]
-    base = base + rs.normal(0, 0.035, (NLIFE, 2))
-    life_t0 = rs.uniform(44.5, 50.0, NLIFE)
-    life_z = hz(base)
-    life_ph = rs.uniform(0, 6.28, NLIFE)
-    life_p = np.zeros((nf, NLIFE, 3), np.float32)
-    life_s = np.zeros((nf, NLIFE), np.float32)
+        p = cb + cv * np.clip(t - ct0, 0, None)[:, None]
+        ch_p[i, :, :2] = p
+        ch_p[i, :, 2] = hz(p) + 0.03
+        ch_s[i] = (t >= ct0) * (t < 47.0)
+    # ── 카메라: 장면마다 한 자리, 컷은 장면 사이에서만 ──
+    center = np.r_[to_xy(37.9, 127.3), 0.0]
+    cam_l = np.zeros((nf, 3), np.float32)
+    cam_t = np.zeros((nf, 3), np.float32)
+    lens = np.zeros(nf, np.float32)
     for i, t in enumerate(ts):
-        life_p[i, :, :2] = base + 0.02 * np.stack([np.sin(t * 0.9 + life_ph), np.cos(t * 0.7 + life_ph)], 1)
-        life_p[i, :, 2] = life_z + 0.03 + 0.03 * (0.5 + 0.5 * np.sin(t * 1.3 + life_ph))
-        life_s[i] = np.clip((t - life_t0) / 0.8, 0, 1) * (0.6 + 0.4 * np.sin(t * 3 + life_ph * 2))
-    dmz_z = hz(dmz_xy) + 0.045
-    return dict(dmz_z=dmz_z.astype(np.float32), X=X.astype(np.float32), Y=Y.astype(np.float32), Z=Z.astype(np.float32), dmz=dmz_xy.astype(np.float32),
-                sh_p=sh_p, sh_s=sh_s, sh_c=sh_c, im_p=im_p, im_s=im_s, fr_p=fr_p, fire_s=fire_s.astype(np.float32),
-                south=south_power.astype(np.float32), north=north_power.astype(np.float32), ref_p=ref_p, ref_s=ref_s,
-                life_p=life_p, life_s=life_s, bbox=np.array([x0, x1, y0, y1], np.float32))
+        if t < 7.0:
+            u = t / 7.0
+            tg = center
+            cl = orbit(center, -90, 60 - 4 * u, 20 - 3 * u)
+            ln_ = 30
+        elif t < 15.0:          # 서울 뒤 낮은 하늘에서 휴전선 쪽을 보는 눈 (포탄이 넘어오는 방향)
+            u = (t - 7.0) / 8.0
+            tg = np.r_[to_xy(37.95, 127.0), 0.15]
+            cl = orbit(tg, -95, 16 + 2 * u, 2.6 - 0.2 * u)
+            ln_ = 28
+        elif t < 23.0:          # 서울 위에서 휴전선 쪽을 보는 3인칭
+            u = (t - 15.0) / 8.0
+            tg = np.r_[to_xy(37.85, 127.0), 0.0]
+            cl = orbit(tg, -112, 32, 4.3 - 0.4 * u)
+            ln_ = 28
+        elif t < 31.0:          # 항모 뒤를 따라가는 시점
+            c3 = np.r_[car[i], 0.0]
+            cl = c3 + np.array([0.5, -0.22, 0.12])
+            tg = c3 + np.array([-2.6, 0.25, 0.0])
+            ln_ = 26
+        elif t < 39.0:          # 전선 뒤에서 북쪽을 보는 시점
+            c3 = np.r_[fcen[i], 0.0]
+            cl = c3 + np.array([0.0, -1.05, 0.5])
+            tg = c3 + np.array([0.0, 1.9, 0.0])
+            ln_ = 26
+        elif t < 47.0:
+            u = (t - 39.0) / 8.0
+            tg = np.r_[to_xy(40.0, 126.4), 0.0]
+            cl = orbit(tg, -90, 50 - 4 * u, 9.5 - 1.0 * u)
+            ln_ = 30
+        elif t < 52.0:
+            u = (t - 47.0) / 5.0
+            tg = center
+            cl = orbit(center, -90, 62, 23 - 1.5 * u)
+            ln_ = 30
+        else:
+            u = (t - 52.0) / 4.0
+            tg = np.r_[to_xy(38.15, 127.2), 0.0]
+            cl = orbit(tg, -85, 46, 9.0 - 0.8 * u)
+            ln_ = 30
+        cam_l[i], cam_t[i], lens[i] = cl, tg, ln_
+    alive = (ts[:, None] < kill_t[None]).astype(np.float32)
+    clock = np.array([keyed(t, CLOCK, ease=lambda u: u) for t in ts], np.float32)
+    return dict(X=X.astype(np.float32), Y=Y.astype(np.float32), Z=Z.astype(np.float32), dmz=dmz_xy.astype(np.float32),
+                dmz_z=(hz(dmz_xy) + 0.045).astype(np.float32), bbox=np.array([x0, x1, y0, y1], np.float32),
+                pt_p=pt_p, pt_s=pt_s, pt_c=pt_c, fl_p=fl_p, fl_s=fl_s, fl_c=fl_c, fr_p=fr_p,
+                fire_s=fire_s.astype(np.float32), south=south.astype(np.float32), north=north.astype(np.float32),
+                jt_p=jt_p, jt_s=jt_s, jt_r=jt_r, sp_p=sp_p, sp_s=sp_s, yaw_c=np.float32(yaw_c),
+                front=front, fl_vis=fl_vis, tanks=tanks, ch_p=ch_p, ch_s=ch_s,
+                units=on_ground(np.r_[art, k9, bat]), alive=alive, cam_l=cam_l, cam_t=cam_t, lens=lens, clock=clock,
+                art=on_ground(art), k9=on_ground(k9), bat=on_ground(bat),
+                carc=np.c_[car, np.full(nf, 0.05)].astype(np.float32), fcen=fcen.astype(np.float32))
 
 
-def ramp_arr(ts, a, b):
-    x = np.clip((np.asarray(ts) - a) / (b - a), 0, 1)
-    return x * x * (3 - 2 * x)
-
-
-CLOCK = [(0.0, 0.0), (4.5, 0.0), (9.6, 4.0), (10.3, 5.0), (15.6, 50.0), (16.4, 60.0), (21.4, 78.0),
-         (22.5, 60 * 24 * 3), (27.5, 60 * 24 * 3 + 180), (28.5, 60 * 24 * 7), (56.0, 60 * 24 * 7)]
-
-
-def hud(t, sim):
-    if t >= 34.0:
-        right = "1953.7.27 정전협정 → 73년째" if t >= 44.0 else ("1950~1953" if t < 39.5 else "시뮬레이션 종료")
-        return {"left": "SIMULATION", "right": right, "right2": "가상 시나리오"}
-    m = keyed(t, CLOCK)
-    d, rem = divmod(int(m), 60 * 24)
-    h, mi = divmod(rem, 60)
-    h += 4
-    d += h // 24
-    h %= 24
-    return {"left": "SIMULATION", "right": f"D+{d}  {h:02d}:{mi:02d}", "right2": "가상 시나리오"}
+def counter(t, sim):
+    if t >= 52.0:
+        return "정전", "73년째"
+    if t >= 47.0:
+        return "시뮬레이션", "결과"
+    m = float(sim["clock"][fi(t)])
+    d, rem = divmod(int(m) + 240, 1440)
+    if d == 0:
+        return "D-DAY", f"{rem // 60:02d}:{rem % 60:02d}"
+    return "경과", f"D+{d}"
 
 
 def labels(t, anchors, sim):
+    f = fi(t)
+    n_art = int(sim["alive"][f, :NART].sum())
+    items = [("seoul", "서울", "white", 0.5, 31.0), ("pyongyang", "평양", "white", 0.5, 7.0),
+             ("pyongyang", "평양", "white", 31.0, 47.0), ("dmz", "휴전선", "red", 0.5, 15.0),
+             ("art", f"장사정포 진지 {n_art}곳", "red", 1.0, 31.0), ("k9", "K9 자주포", "blue", 15.3, 23.0),
+             ("bat", "패트리엇·천궁", "blue", 15.3, 23.0), ("car", "미 항공모함 전단", "blue", 23.3, 31.0),
+             ("osan", "주한미군 (평택)", "blue", 23.3, 31.0), ("front", "한미연합군 전선", "blue", 31.3, 47.0),
+             ("china", "중국 국경", "red", 39.3, 47.0), ("dmz", "휴전선", "green", 52.3, 56.0)]
     out = []
-    for key, nm, col, t0, t1 in (("seoul", "서울", "white", 1.0, 34.0), ("pyongyang", "평양", "white", 1.0, 34.0),
-                                 ("busan", "부산", "white", 1.0, 34.0), ("dmz", "휴전선", "red", 1.0, 44.0),
-                                 ("dmz2", "DMZ", "green", 45.0, 56.0), ("fab", "반도체 공장", "orange", 28.3, 34.0)):
+    for key, nm, col, t0, t1 in items:
         a = anchors.get(key)
-        if a and a[3] and t0 <= t < t1:
-            out.append({"x": a[0], "y": a[1], "text": nm, "color": col, "size": 26, "lift": 8,
-                        "alpha": min(ramp(t, t0, t0 + 0.6), 1 - ramp(t, t1 - 0.5, t1))})
+        if a and a[3] and t0 <= t < t1 and (key != "art" or n_art > 0):
+            out.append({"x": min(960.0, max(130.0, a[0])), "y": a[1], "text": nm, "color": col, "size": 34,
+                        "lift": 10, "alpha": min(ramp(t, t0, t0 + 0.5), 1 - ramp(t, t1 - 0.4, t1))})
     return out
 
 
@@ -255,7 +426,7 @@ def build(ctx):
     from engine import bkit as K
     sim = ctx.sim
     K.world_space(ctx, ambient=(0.25, 0.3, 0.5), ambient_strength=0.08)
-    moon = K.sun(ctx, 0.5, color=(0.6, 0.7, 1.0), rot=(50, 0, -140), angle=2.0)
+    K.sun(ctx, 0.5, color=(0.6, 0.7, 1.0), rot=(50, 0, -140), angle=2.0)
     X, Y, Z = sim["X"], sim["Y"], sim["Z"]
     x0, x1, y0, y1 = [float(v) for v in sim["bbox"]]
     # 지형: 고도색(어둡게) + 야경 텍스처 발광
@@ -285,16 +456,14 @@ def build(ctx):
     e[1].position, e[1].color = 1.0, (0.55, 0.55, 0.58, 1)
     mid = e.new(0.35)
     mid.color = (0.20, 0.22, 0.14, 1)
-    day = ctx.ctl_node(nt, "daylight", 0.0)
-    col = K.mix_rgb(nt, day, K.mix_rgb(nt, 0.55, ramp_.outputs["Color"], (0.05, 0.06, 0.1), "MULTIPLY"),
-                    ramp_.outputs["Color"])
+    col = K.mix_rgb(nt, 0.45, ramp_.outputs["Color"], (0.05, 0.06, 0.1), "MULTIPLY")
     b = K.principled(nt, col, 0.85, emit=(1.0, 0.72, 0.38), estr=K.math_node(nt, "MULTIPLY", glow, 4.5))
     K.ln(nt, b.outputs["BSDF"], out.inputs["Surface"])
     m.cycles.emission_sampling = "NONE"
     K.grid_mesh("terrain", X, Y, Z, m, skirt_z=-0.3)
     K.box_obj("sea", x0 - 0.01, x1 + 0.01, y0 - 0.01, y1 + 0.01, -0.3, 0.0, K.mat_water(color=(0.01, 0.03, 0.08)))
     K.box_obj("base", x0, x1, y0, y1, -0.55, -0.3, K.mat_earth_side())
-    # 군사분계선
+    # 군사분계선 (마지막에 초록으로)
     dmz = sim["dmz"]
     cu = bpy.data.curves.new("dmz", "CURVE")
     cu.dimensions = "3D"
@@ -311,58 +480,94 @@ def build(ctx):
     K.ln(nt, em.outputs[0], out.inputs["Surface"])
     dm.cycles.emission_sampling = "NONE"
     dob.data.materials.append(dm)
-    # 포탄·섬광·화재·피란·생명
-    shell_m, nt, out = K.new_mat("m_shell")
-    em = nt.nodes.new("ShaderNodeEmission")
-    K.ln(nt, K.mix_rgb(nt, K.inst_attr(nt, "kind", "Fac"), (0.45, 0.75, 1.0), (1.0, 0.45, 0.2)), em.inputs["Color"])
-    em.inputs["Strength"].default_value = 14.0
-    K.ln(nt, em.outputs[0], out.inputs["Surface"])
-    shell_m.cycles.emission_sampling = "NONE"
-    sho = K.instancer(ctx, "shells", K.proto(ctx, "p_shell", K.bm_ico(0.022, sub=1), [shell_m]), NSHELL)
-    K.add_attr(sho, "kind")
-    imo = K.instancer(ctx, "impacts", K.proto(ctx, "p_imp", K.bm_ico(0.05, sub=2),
-                                               [K.mat_emit("m_imp", (1.0, 0.62, 0.3), 9.0)]), NIMP)
-    fro = K.instancer(ctx, "fires", K.proto(ctx, "p_fire", K.bm_ico(0.018, sub=1),
-                                             [K.mat_emit("m_fire", (1.0, 0.4, 0.12), 7.0, ctx, "fire")]), NFIRE)
-    rfo = K.instancer(ctx, "refugees", K.proto(ctx, "p_ref", K.bm_ico(0.012, sub=0),
-                                                [K.mat_emit("m_ref", (1.0, 0.95, 0.85), 5.0)]), NREF)
-    lfo = K.instancer(ctx, "life", K.proto(ctx, "p_life", K.bm_ico(0.012, sub=1),
-                                            [K.mat_emit("m_life", (0.45, 1.0, 0.5), 9.0)]), NLIFE)
+
+    def glow_mat(name, strength):
+        mm, nt_, out_ = K.new_mat(name)
+        em_ = nt_.nodes.new("ShaderNodeEmission")
+        K.ln(nt_, K.inst_attr(nt_, "col"), em_.inputs["Color"])
+        em_.inputs["Strength"].default_value = strength
+        K.ln(nt_, em_.outputs[0], out_.inputs["Surface"])
+        mm.cycles.emission_sampling = "NONE"
+        return mm
+
+    pts = K.instancer(ctx, "projectiles", K.proto(ctx, "p_pt", K.bm_ico(0.011, sub=1), [glow_mat("m_pt", 8.0)]), NPT)
+    fls = K.instancer(ctx, "flashes", K.proto(ctx, "p_fl", K.bm_ico(0.035, sub=2), [glow_mat("m_fl", 5.0)]), NFL)
+    fro = K.instancer(ctx, "fires", K.proto(ctx, "p_fire", K.bm_ico(0.010, sub=1),
+                                             [K.mat_emit("m_fire", (1.0, 0.4, 0.12), 3.5, ctx, "fire")]), NFIRE)
+    # 부대 표식: 진지(빨강)·K9·포대(파랑) — 스스로 빛나서 밤에도 보이게
+    um = K.mat_inst("m_unit", 0.5, emit_attr="glow", emit_color=(1, 1, 1), emit_strength=2.5)
+    uo = K.instancer(ctx, "units", K.proto_box(ctx, um, "p_unit"), NART + NK9 + NBAT, vector_scale=True)
+    K.add_attr(uo, "glow")
+    tank_bm = K.join_bms([(K.bm_cube(0.03, 0.02, 0.01, bottom=True), 0),
+                          (K.bm_cube(0.014, 0.012, 0.007, (0, 0, 0.01), True), 0),
+                          (K.bm_cube(0.024, 0.004, 0.003, (0.016, 0, 0.013), True), 0)])
+    tko = K.instancer(ctx, "tanks", K.proto(ctx, "p_tank", tank_bm,
+                                             [K.mat_simple("m_tank", (0.25, 0.45, 0.8), 0.5, emit=BLUE, estr=0.6)]), NTK)
+    frl = K.instancer(ctx, "front", K.proto(ctx, "p_front", K.bm_ico(0.008, sub=1),
+                                             [K.mat_emit("m_front", BLUE, 4.0)]), NFR)
+    jet_bm = K.join_bms([(K.bm_cube(0.07, 0.012, 0.008), 0), (K.bm_cube(0.022, 0.07, 0.003, (-0.006, 0, 0)), 0),
+                         (K.bm_cube(0.012, 0.03, 0.003, (-0.03, 0, 0)), 0), (K.bm_ico(0.005, (0.035, 0, 0), 1), 1)])
+    jto = K.instancer(ctx, "jets", K.proto(ctx, "p_jet", jet_bm,
+                                            [K.mat_simple("m_jet", (0.75, 0.78, 0.82), 0.4, emit=(0.5, 0.7, 1.0), estr=0.8),
+                                             K.mat_emit("m_jetled", (0.6, 0.9, 1.0), 12.0)]), NJET)
+    ship_bm = K.join_bms([(K.bm_cube(0.35, 0.08, 0.026, bottom=True), 0),
+                          (K.bm_cube(0.055, 0.018, 0.035, (0.045, -0.026, 0.026), True), 0),
+                          (K.bm_cube(0.26, 0.006, 0.004, (0, 0, 0.027), True), 1)])
+    spo = K.instancer(ctx, "ships", K.proto(ctx, "p_ship", ship_bm, [K.mat_simple("m_ship", (0.42, 0.45, 0.5), 0.5),
+                                                                     K.mat_emit("m_deck", (0.7, 0.85, 1.0), 1.2)]), NSHIP)
+    cho = K.instancer(ctx, "china", K.proto(ctx, "p_ch", K.bm_ico(0.014, sub=1), [K.mat_emit("m_ch", RED, 8.0)]), NCH)
     cam = K.CamRig(ctx, 30, fstop=0)
-    seoul = tuple(float(v) for v in to_xy(37.5665, 126.978)) + (0.0,)
-    dmzc = tuple(float(v) for v in to_xy(38.1, 127.1)) + (0.0,)
-    center = tuple(float(v) for v in to_xy(37.6, 127.6)) + (0.0,)
-    CAM = [(0.0, center, -90, 62, 23.0, 30), (4.5, dmzc, -95, 50, 15.0, 30), (10.0, dmzc, -100, 42, 11.0, 32),
-           (16.0, seoul, -110, 46, 9.0, 32), (21.5, seoul, -115, 50, 10.5, 32), (22.5, center, -100, 60, 21.0, 30),
-           (28.0, center, -95, 64, 24.0, 30), (34.0, center, -90, 66, 25.0, 30), (39.5, center, -85, 66, 25.0, 30),
-           (44.0, dmzc, -90, 48, 12.5, 32), (51.5, dmzc, -80, 44, 11.0, 32), (56.0, center, -75, 58, 22.0, 30)]
+    U = sim["units"]
+    nu = len(U)
+    ucol = np.r_[np.tile(RED, (NART, 1)), np.tile(BLUE, (NK9, 1)), np.tile((0.55, 0.9, 1.0), (NBAT, 1))]
+    usize = np.r_[np.tile((0.045, 0.045, 0.025), (NART, 1)), np.tile((0.035, 0.035, 0.02), (NK9, 1)),
+                  np.tile((0.05, 0.05, 0.04), (NBAT, 1))]
     fp = sim["fr_p"]
-    nfz = np.zeros((NFIRE, 3), np.float32)
 
     def upd(t, f):
-        v = keyed(t, snap([(k[0], (*k[1], *k[2:])) for k in CAM]))
-        cam.set(v[:3], v[3], v[4], v[5], v[6], shift=0.05)
+        cam.look(sim["cam_l"][f], sim["cam_t"][f], float(sim["lens"][f]))
         ctx.set_ctl("south", float(sim["south"][f]))
         ctx.set_ctl("north", float(sim["north"][f]))
-        day = ramp(t, 43.0, 47.0) * 0.7
-        ctx.set_ctl("daylight", day)
-        moon.data.energy = 0.5 + 2.4 * day
-        moon.data.color = (0.6 + 0.4 * day, 0.7 + 0.2 * day, 1.0 - 0.2 * day)
-        ctx.set_ctl("ambient", 0.08 + 0.25 * day)
-        g = ramp(t, 44.0, 46.0)
+        g = ramp(t, 52.0, 53.5)
         ctx.set_rgb("dmz_col", (1.0 - 0.6 * g, 0.25 + 0.75 * g, 0.2 + 0.25 * g))
         ctx.set_ctl("dmz_str", 3.0 + 2.0 * g)
-        ctx.set_ctl("fire", 1.0 - 0.8 * ramp(t, 40.0, 46.0))
-        K.set_points(sho, sim["sh_p"][f], scale=sim["sh_s"][f], rot=np.zeros((NSHELL, 3)), col=np.ones((NSHELL, 3)),
-                     kind=sim["sh_c"][f])
-        K.set_points(imo, sim["im_p"][f], scale=sim["im_s"][f], rot=np.zeros((NIMP, 3)), col=np.ones((NIMP, 3)))
-        K.set_points(fro, fp, scale=sim["fire_s"][f], rot=nfz, col=np.ones((NFIRE, 3)))
-        K.set_points(rfo, sim["ref_p"][f], scale=sim["ref_s"][f], rot=np.zeros((NREF, 3)), col=np.ones((NREF, 3)))
-        K.set_points(lfo, sim["life_p"][f], scale=sim["life_s"][f], rot=np.zeros((NLIFE, 3)), col=np.ones((NLIFE, 3)))
+        ctx.set_ctl("fire", 1.0 - 0.6 * ramp(t, 50.0, 54.0))
+        K.set_points(pts, sim["pt_p"][f], scale=sim["pt_s"][f], rot=np.zeros((NPT, 3)), col=sim["pt_c"][f])
+        K.set_points(fls, sim["fl_p"][f], scale=sim["fl_s"][f], rot=np.zeros((NFL, 3)), col=sim["fl_c"][f])
+        K.set_points(fro, fp, scale=sim["fire_s"][f], rot=np.zeros((NFIRE, 3)), col=np.ones((NFIRE, 3)))
+        vis = np.r_[sim["alive"][f], np.full(NK9 + NBAT, 1.0 if t < 47.0 else 0.0)]
+        K.set_points(uo, U, scale=vis, size=usize, rot=np.zeros((nu, 3)), col=ucol, glow=np.ones(nu))
+        fv = float(sim["fl_vis"][f])
+        K.set_points(tko, sim["tanks"][f], scale=np.full(NTK, fv),
+                     rot=np.tile((0, 0, math.pi / 2), (NTK, 1)), col=np.ones((NTK, 3)))
+        K.set_points(frl, sim["front"][f], scale=np.full(NFR, fv), rot=np.zeros((NFR, 3)), col=np.ones((NFR, 3)))
+        K.set_points(jto, sim["jt_p"][f], scale=sim["jt_s"][f] * 1.4, rot=sim["jt_r"][f], col=np.ones((NJET, 3)))
+        K.set_points(spo, sim["sp_p"][f], scale=sim["sp_s"][f], rot=np.tile((0, 0, float(sim["yaw_c"])), (NSHIP, 1)),
+                     col=np.ones((NSHIP, 3)))
+        K.set_points(cho, sim["ch_p"][f], scale=sim["ch_s"][f], rot=np.zeros((NCH, 3)), col=np.ones((NCH, 3)))
 
     ctx.on_frame(upd)
-    pos = {"seoul": (37.5665, 126.978), "pyongyang": (39.0392, 125.7625), "busan": (35.1796, 129.0756),
-           "dmz": (38.25, 127.6), "dmz2": (38.3, 127.9), "fab": (37.05, 127.1)}
-    for k, (la, lo) in pos.items():
-        xy = to_xy(la, lo)
-        ctx.anchor(k, (lambda xy: lambda t: (float(xy[0]), float(xy[1]), 0.25))(xy))
+
+    def fixed(lat, lon, z=0.25):
+        xy = to_xy(lat, lon)
+        return lambda t: (float(xy[0]), float(xy[1]), z)
+
+    def mean_of(key, z=0.12):
+        c = sim[key].mean(0)
+        return lambda t: (float(c[0]), float(c[1]), float(c[2]) + z)
+
+    def art_anchor(t):
+        al = sim["alive"][fi(t), :NART] > 0
+        p = sim["art"][al].mean(0) if al.any() else sim["art"].mean(0)
+        return float(p[0]), float(p[1]), float(p[2]) + 0.12
+
+    ctx.anchor("seoul", fixed(37.5665, 126.978))
+    ctx.anchor("pyongyang", fixed(39.0392, 125.7625))
+    ctx.anchor("dmz", fixed(38.28, 127.6))
+    ctx.anchor("china", fixed(41.2, 126.6, 0.35))
+    ctx.anchor("osan", fixed(36.97, 127.03, 0.15))
+    ctx.anchor("k9", mean_of("k9"))
+    ctx.anchor("bat", mean_of("bat", 0.18))
+    ctx.anchor("art", art_anchor)
+    ctx.anchor("car", lambda t: tuple(float(v) for v in sim["carc"][fi(t)] + np.array([0, 0, 0.06])))
+    ctx.anchor("front", lambda t: (float(sim["fcen"][fi(t)][0]), float(sim["fcen"][fi(t)][1]) + 0.25, 0.25))
