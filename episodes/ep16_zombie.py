@@ -16,7 +16,7 @@ from engine.jamsil_ep import CAR_COLORS, crowd, eye_from, light_keys, people_col
 DUR = 56.0
 META = {"id": "ep16", "title": "만약 잠실에 좀비가 나타난다면?", "duration": DUR,
         "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
-        "music": {"key": "D", "mode": "minor", "bpm": 84, "seed": 161, "twist_at": 46.0}}
+        "music": {"key": "D", "mode": "lydian", "bpm": 84, "seed": 161, "twist_at": 46.0}}
 C = np.array([-214.4, 61.7])
 NP, NC = 700, 140
 

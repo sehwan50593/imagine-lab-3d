@@ -15,7 +15,7 @@ from engine.jamsil_ep import CAR_COLORS, crowd, eye_from, light_keys, people_col
 DUR = 56.0
 META = {"id": "ep17", "title": "만약 인터넷이 하루 끊긴다면?", "duration": DUR,
         "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
-        "music": {"key": "G", "mode": "dorian", "bpm": 76, "seed": 171, "twist_at": 46.0}}
+        "music": {"key": "G", "mode": "major", "bpm": 76, "seed": 171, "twist_at": 46.0}}
 C = np.array([-214.4, 61.7])
 NP, NC = 640, 150
 ATM = np.array([(-260.0, 20.0), (-170.0, 110.0), (-150.0, 10.0), (-280.0, 110.0)], np.float32)

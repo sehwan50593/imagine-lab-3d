@@ -15,7 +15,7 @@ from engine.jamsil_ep import CAR_COLORS, crowd, eye_from, people_colors, pose_of
 DUR = 56.0
 META = {"id": "ep15", "title": "만약 눈이 염산이라면?", "duration": DUR,
         "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
-        "music": {"key": "E", "mode": "minor", "bpm": 72, "seed": 151, "twist_at": 46.0}}
+        "music": {"key": "E", "mode": "major", "bpm": 72, "seed": 151, "twist_at": 46.0}}
 NP, NC, NS, NF = 600, 120, 1400, 200
 LAKE = (130.0, -95.0)
 TOWER = (14.0, -6.0)

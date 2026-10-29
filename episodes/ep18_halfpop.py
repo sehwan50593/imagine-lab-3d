@@ -14,7 +14,7 @@ from engine.jamsil_ep import CAR_COLORS, crowd, eye_from, light_keys, people_col
 DUR = 56.0
 META = {"id": "ep18", "title": "만약 한국 인구가 절반이 된다면?", "duration": DUR,
         "render": {"pct": 50, "samples": 10, "bounces": 2, "chunks": 7},
-        "music": {"key": "C", "mode": "minor", "bpm": 68, "seed": 181, "twist_at": 46.0}}
+        "music": {"key": "C", "mode": "major", "bpm": 68, "seed": 181, "twist_at": 46.0}}
 NP, NC = 700, 140
 LAKE = (130.0, -95.0)
 # (영상 초, 인구 비율, 65세 이상 비율)
