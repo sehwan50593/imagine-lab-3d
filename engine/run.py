@@ -89,6 +89,15 @@ def cmd_assemble(a):
         raise SystemExit(f"조각 누락: {dur:.2f}s / {want}s")
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     music = d / "music.m4a"
+    voice = ROOT / "assets" / "voice" / a.ep / "narration.m4a"
+    if voice.exists():   # 내레이션 편: 음악은 낮게 깔고, 목소리가 나올 때 더 줄임
+        fl = ("[1:a]volume=0.32[m];[2:a]asplit=2[v][sc];[m][sc]sidechaincompress=threshold=0.03:ratio=4:"
+              "attack=20:release=300[md];[md][v]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / "video.mp4"), "-i", str(music), "-i", str(voice),
+                        "-filter_complex", fl, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac",
+                        "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(a.out)], check=True)
+        print("assemble ok (+narration)", a.out)
+        return
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / "video.mp4"), "-i", str(music), "-map", "0:v",
                     "-map", "1:a", "-c:v", "copy", "-c:a", "copy", "-shortest", "-movflags", "+faststart",
                     str(a.out)], check=True)

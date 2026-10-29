@@ -13,6 +13,8 @@ LABEL_Y = 346
 BIG_Y = 474
 SUB_CY = 1590
 SUB_W = 980
+PIXE_TITLE_Y = 660     # 기준 채널식 가운데 제목 (줄 수만큼 위로)
+PIXE_SUB_Y = 1520      # 기준 채널식 아래 한 줄 자막
 
 
 @lru_cache(maxsize=64)
@@ -226,6 +228,8 @@ class Overlay:
 
     def draw(self, img, t, anchors):
         ep = self.ep
+        if getattr(ep, "STYLE", "") == "pixe":
+            return self._pixe(img, t)
         beats = ep.BEATS
         # 장면 전환 번쩍임
         flashes = list(getattr(ep, "FLASH", []))
@@ -284,6 +288,33 @@ class Overlay:
                 paste(img, sub_img(b.sub, bench), W / 2, SUB_CY - (40 if bench else 0),
                       block_alpha(t, b.t0, b.t1, fin, fout))
             break
+
+    def _pixe(self, img, t):
+        """10-30 오너 기준 채널 방식: 첫 컷은 가운데 큰 제목(내레이션에 맞춰 한 줄씩), 이후 아래 가운데 한 줄 자막."""
+        ep = self.ep
+        t0, t1 = ep.title_span()
+        rows = ep.TITLE
+        if t0 - 0.1 <= t < t1 + 0.35:
+            n = len(rows)
+            y = PIXE_TITLE_Y - (n - 1) * 66
+            out = smooth((t1 + 0.35 - t) / 0.2)
+            for k, (txt, c) in enumerate(rows):
+                tk = t0 + (t1 - t0) * k / n * 0.9
+                key = ("ptitle", txt, c)
+                im = self.cache.get(key)
+                if im is None:
+                    im = self.cache[key] = text_block([(txt, 100, 900, c, 8)], pad=8)
+                a = smooth((t - tk) / 0.12) * out
+                paste(img, im, W / 2, y + k * 132, a, 0.9 + 0.1 * smooth((t - tk) / 0.14))
+        for s, e, txt in ep.captions():
+            if s - 0.06 <= t < e + 0.16:
+                key = ("pcap", txt)
+                im = self.cache.get(key)
+                if im is None:
+                    im = self.cache[key] = text_block([(txt, 66, 850, "white", 7)], pad=10)
+                a = smooth((t - s + 0.06) / 0.08) * smooth((e + 0.16 - t) / 0.08)
+                paste(img, im, W / 2, PIXE_SUB_Y, a, 0.96 + 0.04 * smooth((t - s + 0.06) / 0.12))
+                break
 
     def _counter(self, t):
         """편에 counter()가 없으면 지금까지의 마지막 시간 배지(D+1, 1년 후…)를 오른쪽 카운터로."""
