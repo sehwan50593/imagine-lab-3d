@@ -30,7 +30,7 @@ IX = {n: k for k, n in enumerate(NAMES)}
 # say: 내레이션 = 자막 / shot: (세트, 목표점, 방위각, 고도각, 거리, 렌즈, 끝 거리 비율, 방위각 변화)
 LINES = [
     dict(say="만약에 속마음이 머리 위에 보인다면 어떻게 될까요?", gap=0.7,
-         shot=("street", (0.0, 3.85, 2.0), -88, 6, 8.0, 26, 0.93, 3)),
+         shot=("street", (0.0, 3.85, 2.6), -88, 6, 7.0, 26, 0.93, 3)),   # 말풍선이 제목 글자 아래로 오게 목표점을 올림
     dict(say="어느 날부터, 속마음이 머리 위에 떠요", shot=("street", (-0.02, 3.85, 1.9), -90, 5, 4.2, 28, 0.9, 0)),
     dict(say="면접관이 환하게 웃으며 끄덕여요", shot=("interview", (0.0, 1.15, 1.3), -90, 8, 5.0, 26, 0.92, 2)),
     dict(say="그런데 머리 위엔 쿨쿨이 떠 있었죠", shot=("interview", (0.0, 1.15, 1.5), -90, 6, 4.9, 26, 0.95, -2)),
@@ -117,7 +117,7 @@ ICON_NAMES = ["heart", "anger", "question", "zzz1", "zzz2", "zzz3", "coin", "foo
 ICON_IX = {n: k for k, n in enumerate(ICON_NAMES)}
 FLICK = ["food", "heart", "zzz3", "coin", "note", "question", "anger", "excl"]    # 쉴 새 없이 바뀌는 생각들
 ICON_FX = {"heart": "beat", "anger": "shake", "face": "calm"}
-BUBW = {"hook": 0.23, "int_b": 0.24, "date_b": 0.30, "deal_a": 0.28, "deal_b": 0.28, "hat_a": 0.2, "tw_b": 0.2,
+BUBW = {"hook": 0.26, "int_b": 0.24, "date_b": 0.30, "deal_a": 0.28, "deal_b": 0.28, "hat_a": 0.2, "tw_b": 0.2,
         "tw_c": 0.24}   # 말풍선이 화면 가로에서 차지할 비율(기본 0.36)
 BUB_W = 0.66                                                      # 말풍선 판 가로(m)
 
@@ -564,7 +564,7 @@ def crowd(seed=221):
             W.append(dict(k=k, lane=lane, y=y, d=d, spd=spd, x0=-14.0 + sp * (j + 0.5) + float(rs.uniform(-0.12, 0.12)) * sp,
                           ph0=float(rs.random()), hair=int(rs.random() < 0.45),
                           sh=X.SHIRTS[1 + int(rs.integers(len(X.SHIRTS) - 1))], pa=X.PANTS[int(rs.integers(len(X.PANTS)))],
-                          icon=FLICK[(k * 3) % len(FLICK)], on=float(rs.uniform(0.08, 0.72)),
+                          icon=FLICK[(k * 3) % len(FLICK)], on=float(rs.uniform(0.0, 0.2)),   # 훅: 첫 1초 안에 톡
                           ph=float(rs.random()), mul=(1, 3, 5, 7)[int(rs.integers(4))],
                           hat=(int(rs.integers(3)), col, band, HAT_T0 + 0.25 + 0.95 * float(rs.random()),
                                HAT_OFF + 0.05 + 0.55 * float(rs.random()))))
