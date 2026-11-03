@@ -335,9 +335,9 @@ class Overlay:
             n = len(rows)
             y = PIXE_TITLE_Y - (n - 1) * 66
             out = smooth((t1 + 0.35 - t) / 0.2)
-            fast = getattr(ep, "TITLE_FAST", False)   # 정보형: 첫 1초 이탈 방지 — 네 줄이 0.5초 안에 다 뜬다
+            fast = getattr(ep, "TITLE_FAST", False)   # 정보형: 첫 1초 이탈 방지 — 0초 프레임(커버)부터 네 줄이 거의 다 떠 있다
             for k, (txt, c) in enumerate(rows):
-                tk = (0.05 + 0.14 * k) if fast else t0 + (t1 - t0) * k / n * 0.9
+                tk = (-0.35 + 0.09 * k) if fast else t0 + (t1 - t0) * k / n * 0.9
                 key = ("ptitle", txt, c)
                 im = self.cache.get(key)
                 if im is None:
