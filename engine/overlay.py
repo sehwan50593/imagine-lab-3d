@@ -203,7 +203,42 @@ def counter_img(top, main):
 
 
 COUNTER_Y = 760
-SPECIAL = ("반전", "지금", "가정", "만약", "결과", "가상 시나리오", "현재", "오늘", "잠실", "1950년의 기억",
+V2_CARD_Y = 370        # 정보 카드 중심 (위 230px 앱 UI 아래, 피사체가 오는 45~72% 높이 위)
+V2_SUB_Y = 1400        # 정보형 자막 중심 (아래 1440px부터 앱 글씨·버튼이 덮음)
+CLOCK_Y = 700
+
+
+@lru_cache(maxsize=128)
+def card_img(big, small="", color="yellow", src=""):
+    """정보 카드: 핵심 숫자 크게 + 한 줄 설명 + 작은 출처 (소리 없이도 이해되게). pixe 편의 CARDS용."""
+    lines = [(big, 124, 900, color, 9)]
+    if small:
+        lines.append((small, 52, 800, "white", 5))
+    if src:
+        lines.append((src, 34, 600, "gray", 4))
+    im = text_block(lines, pad=26)
+    plate = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ImageDraw.Draw(plate).rounded_rectangle((6, 6, im.width - 7, im.height - 7), radius=34, fill=(6, 8, 18, 118))
+    return Image.alpha_composite(plate, im)
+
+
+@lru_cache(maxsize=64)
+def clock_img(top, main):
+    """오른쪽 경과 시간 배지 (예: '경과' / '1주 뒤'). counter_img보다 크다."""
+    f1, f2 = font(34, 700), font(64, 900)
+    w = int(max(f1.getlength(top), f2.getlength(main))) + 56
+    a1, d1 = f1.getmetrics()
+    a2, d2 = f2.getmetrics()
+    h = a1 + d1 + a2 + d2 + 40
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=24, fill=(6, 8, 18, 214), outline=(255, 214, 120, 235), width=3)
+    d.text(((w - f1.getlength(top)) / 2, 14), top, font=f1, fill=(255, 214, 120, 255))
+    d.text(((w - f2.getlength(main)) / 2, 18 + a1 + d1), main, font=f2, fill=(255, 255, 255, 255))
+    return im
+
+
+SPECIAL =("반전", "지금", "가정", "만약", "결과", "가상 시나리오", "현재", "오늘", "잠실", "1950년의 기억",
            "얼마나 걸릴까?", "그럼 11시간은?", "2만 년 전", "TEST")   # 시간이 아닌 배지 — 이것만 위 가운데 칩으로
 
 
@@ -294,12 +329,15 @@ class Overlay:
         ep = self.ep
         t0, t1 = ep.title_span()
         rows = ep.TITLE
+        if getattr(ep, "TITLE_FAST", False):
+            t0 = 0.0
         if t0 - 0.1 <= t < t1 + 0.35:
             n = len(rows)
             y = PIXE_TITLE_Y - (n - 1) * 66
             out = smooth((t1 + 0.35 - t) / 0.2)
+            fast = getattr(ep, "TITLE_FAST", False)   # 정보형: 첫 1초 이탈 방지 — 네 줄이 0.5초 안에 다 뜬다
             for k, (txt, c) in enumerate(rows):
-                tk = t0 + (t1 - t0) * k / n * 0.9
+                tk = (0.05 + 0.14 * k) if fast else t0 + (t1 - t0) * k / n * 0.9
                 key = ("ptitle", txt, c)
                 im = self.cache.get(key)
                 if im is None:
@@ -313,8 +351,35 @@ class Overlay:
                 if im is None:
                     im = self.cache[key] = text_block([(txt, 66, 850, "white", 7)], pad=10)
                 a = smooth((t - s + 0.06) / 0.08) * smooth((e + 0.16 - t) / 0.08)
-                paste(img, im, W / 2, PIXE_SUB_Y, a, 0.96 + 0.04 * smooth((t - s + 0.06) / 0.12))
+                # 정보형(TITLE_FAST): 틱톡·쇼츠 아래 앱 글씨(y 1440~)에 안 가리게 자막을 올린다
+                sub_y = V2_SUB_Y if getattr(ep, "TITLE_FAST", False) else PIXE_SUB_Y
+                paste(img, im, W / 2, sub_y, a, 0.96 + 0.04 * smooth((t - s + 0.06) / 0.12))
                 break
+        self._pixe_info(img, t)
+
+    def _pixe_info(self, img, t):
+        """정보형 편(11-03 오너: 내용이 너무 없다)용 화면 정보. 편 파일에 있으면 그린다.
+        CARDS=[dict(lines=(a, b), big="시속 1,670km", small="적도 자전 속도", color="yellow", src="출처 NASA")]
+          — a~b번 줄 동안 위쪽에 핵심 숫자 카드. 0번 줄(제목)과는 겹치지 않게 쓴다.
+        CLOCK=[(줄, "경과", "1주 뒤"), (줄, None)] — 그 줄부터 오른쪽 경과 시간 배지, None이면 숨김."""
+        ep = self.ep
+        cards, clock = getattr(ep, "CARDS", None), getattr(ep, "CLOCK", None)
+        if clock:
+            cur = None
+            for e in clock:
+                if e[0] <= ep.line_at(t):
+                    cur = e
+            if cur is not None and cur[1] is not None:
+                u = t - ep.shot_span(cur[0])[0]
+                paste(img, clock_img(cur[1], cur[2]), W - 26 - clock_img(cur[1], cur[2]).width / 2, CLOCK_Y, 1.0,
+                      0.9 + 0.1 * smooth(u / 0.22))
+        for c in cards or []:
+            a, b = c["lines"]
+            s0, s1 = ep.shot_span(a)[0], ep.shot_span(b)[1]
+            if s0 - 0.02 <= t < s1 + 0.05:
+                al = smooth((t - s0) / 0.2) * smooth((s1 - t) / 0.16)
+                im = card_img(c["big"], c.get("small", ""), c.get("color", "yellow"), c.get("src", ""))
+                paste(img, im, W / 2, V2_CARD_Y, al, 0.92 + 0.08 * smooth((t - s0) / 0.22))
 
     def _counter(self, t):
         """편에 counter()가 없으면 지금까지의 마지막 시간 배지(D+1, 1년 후…)를 오른쪽 카운터로."""
