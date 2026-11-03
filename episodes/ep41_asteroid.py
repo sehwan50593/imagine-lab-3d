@@ -144,7 +144,7 @@ for _ln in LINES[:20]:                      # 줄 사이 간격: 기본 0.3초�
 LINES[21].setdefault("gap", 0.24)
 TITLE = [("만약에", "white"), ("소행성이", "white"), ("서울에 떨어진다면", "white"), ("어떻게 될까요?", "yellow")]
 TWIST = 14          # '그런데 인류는 소행성 궤도를 바꾼 적이 있어요' 줄 (반전)
-CLOCK = [(1, "경과", "바로"), (6, "경과", "1주 뒤"), (8, None), (11, "경과", "1년 뒤"), (14, "경과", "지금"), (19, None)]
+CLOCK = [(1, "경과", "바로"), (6, "경과", "1주 뒤"), (8, None), (11, "경과", "1년 뒤"), (12, None), (14, "경과", "지금"), (19, None)]
 CARDS = [
     dict(lines=(1, 1), big="지름 17~20m", small="2013 첼랴빈스크 소행성 · 상공 약 23~30km에서 폭발", color="yellow", src="NASA JPL · Nature 2013"),
     dict(lines=(2, 2), big="히로시마의 30배↑", small="폭발 에너지 약 440~500킬로톤", color="red", src="NASA JPL CNEOS · Nature 2013"),
