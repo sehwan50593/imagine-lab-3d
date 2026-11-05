@@ -124,7 +124,7 @@ LINES = [
          shot=("field", (0.0, 0.0, 1.0), -80, 4, 6.5, 26, 0.9, -4, 0.06)),
     dict(say="지구를 움직이려면 몇 명이 더 필요할까요?", cap="지구를 움직이려면 몇 명이 더?",
          shot=("field", (0.0, 0.0, 1.45), -90, 2, 5.5, 30, 0.9, 0, 0.06)),
-    dict(say="내일 낮 열두 시, 퀵샌드에 빠진다면?", cap="다음 편 · 퀵샌드에 빠진다면?",
+    dict(say="오늘 저녁 일곱 시, 퀵샌드에 빠진다면?", cap="다음 편 · 퀵샌드에 빠진다면?",
          shot=("sand", (0.0, 0.0, 0.4), -90, 38, 14.5, 26, 0.9, 3, 0.0)),
 ]
 assert len(LINES) == len(NAMES)
@@ -145,7 +145,7 @@ CARDS = [
     dict(lines=(14, 14), big="히로시마의 1/30", small="점프 에너지 합계 TNT 약 470톤(계산)", color="cyan", src="OSTI · Britannica · 계산"),
     dict(lines=(15, 15), big="소행성의 1/1000", small="41편 첼랴빈스크 약 440kt 대비(계산)", color="cyan", src="NASA JPL CNEOS · 계산"),
     dict(lines=(17, 17), big="서울은 1㎡에 13명", small="서울 약 605㎢ 기준(계산) · 5명↑ 위험", color="red", src="서울시 통계 · G. Keith Still · 계산"),
-    dict(lines=(21, 21), big="다음 편", small="내일 낮 12시 · 퀵샌드에 빠진다면?", color="cyan", src="구독하면 놓치지 않아요"),
+    dict(lines=(21, 21), big="다음 편", small="오늘 저녁 7시 · 퀵샌드에 빠진다면?", color="cyan", src="구독하면 놓치지 않아요"),
 ]
 for _ln in LINES:
     assert len(_ln.get("cap", _ln["say"])) <= 20, (_ln.get("cap", _ln["say"]), len(_ln.get("cap", _ln["say"])))
