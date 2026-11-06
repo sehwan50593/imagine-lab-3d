@@ -15,6 +15,8 @@ SUB_CY = 1590
 SUB_W = 980
 PIXE_TITLE_Y = 660     # 기준 채널식 가운데 제목 (줄 수만큼 위로)
 PIXE_SUB_Y = 1520      # 기준 채널식 아래 한 줄 자막
+# STYLE='ref'(11-06 오너: 남자 한 명 편 형식·내레이션 없음): 같은 배치를 틱톡·쇼츠 위 탭·아래 설명 글씨 밖으로 조금 옮김
+REF_BADGE_Y, REF_TOP_DY, REF_SUB_CY = 214, 22, 1410
 
 
 @lru_cache(maxsize=64)
@@ -283,12 +285,13 @@ class Overlay:
                       alpha=lb.get("alpha", 1.0), scale=lb.get("scale", 1.0))
         # HUD: 시뮬레이션 실행 표시 + 경과 시간
         bench = getattr(ep, "STYLE", "bench") == "bench"   # 10-27부터 모든 편 기본
+        ref = getattr(ep, "STYLE", "") == "ref"            # 기준 영상처럼 HUD 없이 위 칩·제목·아래 자막만
         if bench:
             c = ep.counter(t, self.sim) if hasattr(ep, "counter") else self._counter(t)
             if c:
                 im = counter_img(*c)
                 paste(img, im, W - 30 - im.width / 2, COUNTER_Y, 1.0)
-        else:
+        elif not ref:
             hud = ep.hud(t, self.sim) if hasattr(ep, "hud") else {}
             self._hud(img, t, hud)
         for i, b in enumerate(beats):
@@ -300,7 +303,7 @@ class Overlay:
             fin = 0 if (self._same(prev, b, "badge") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
             fout = 0 if self._same(nxt, b, "badge") and nxt.t0 <= b.t1 + 0.05 else 0.22
             if b.badge and (not bench or b.badge in SPECIAL):   # 시간 배지는 오른쪽 카운터로
-                paste(img, badge_img(b.badge), W / 2, BADGE_Y, block_alpha(t, b.t0, b.t1, fin, fout))
+                paste(img, badge_img(b.badge), W / 2, REF_BADGE_Y if ref else BADGE_Y, block_alpha(t, b.t0, b.t1, fin, fout))
             big = b.big(t, self.sim) if callable(b.big) else b.big
             same_title = lambda o: o is not None and o.title == b.title and o.label == b.label and \
                 (o.big == b.big or (callable(o.big) and o.big is b.big)) and o.note == b.note
@@ -315,12 +318,12 @@ class Overlay:
             if im is not None:
                 a = block_alpha(t, b.t0, b.t1, fin, fout)
                 pop = 1.0 if fin == 0 else 0.94 + 0.06 * smooth((t - b.t0) / 0.32)
-                top = 300 if b.label else 318
+                top = (300 if b.label else 318) + (REF_TOP_DY if ref else 0)
                 paste(img, im, W / 2, top + im.height / 2 - 18, a, pop)
             if b.sub:
                 fin = 0 if (self._same(prev, b, "sub") and prev.t1 >= b.t0 - 0.05) or b.t0 <= 0 else 0.25
                 fout = 0 if self._same(nxt, b, "sub") and nxt.t0 <= b.t1 + 0.05 else 0.22
-                paste(img, sub_img(b.sub, bench), W / 2, SUB_CY - (40 if bench else 0),
+                paste(img, sub_img(b.sub, bench), W / 2, REF_SUB_CY if ref else SUB_CY - (40 if bench else 0),
                       block_alpha(t, b.t0, b.t1, fin, fout))
             break
 

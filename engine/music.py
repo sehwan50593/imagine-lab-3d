@@ -150,18 +150,94 @@ def render(mid, wav, sf2=None):
     if not sf2:
         raise RuntimeError("FluidR3_GM.sf2 없음 (apt install fluid-soundfont-gm)")
     cmd = ["fluidsynth", "-ni", "-q", "-g", "0.45", "-r", "44100", "-R", "1", "-C", "0",
-           "-o", "synth.reverb.room-size=0.88", "-o", "synth.reverb.damp=0.28",
-           "-o", "synth.reverb.width=1.0", "-o", "synth.reverb.level=0.85",
+           "-o", "synth.reverb.room-size=0.45", "-o", "synth.reverb.damp=0.6",
+           "-o", "synth.reverb.width=0.8", "-o", "synth.reverb.level=0.3",
            "-F", str(wav), sf2, str(mid)]
     subprocess.run(cmd, check=True)
 
 
 def master(wav, out, duration):
+    """out이 .f32면 효과음과 섞을 원시 파형(44.1kHz 스테레오 float32)으로."""
     fo = max(0.0, duration - 3.2)
     af = (f"highpass=f=45,atrim=0:{duration:.3f},afade=t=in:st=0:d=1.0,"
-          f"afade=t=out:st={fo:.3f}:d=3.2,loudnorm=I=-17:TP=-1.5:LRA=9")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-af", af, "-ar", "44100",
-                    "-ac", "2", "-c:a", "aac", "-b:a", "192k", str(out)], check=True)
+          f"afade=t=out:st={fo:.3f}:d=3.2,loudnorm=I=-23:TP=-1.5:LRA=9")
+    enc = ["-f", "f32le"] if str(out).endswith(".f32") else ["-c:a", "aac", "-b:a", "192k"]
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-af", af, "-ar", str(SR),
+                    "-ac", "2", *enc, str(out)], check=True)
+
+
+# ── 효과음 (11-06 오너: 배경음은 낮추고 더 찰싹하게) — CI 음악 잡엔 numpy만 있어서 FFT로 거름 ──
+SR = 44100
+SFX_GAIN = {"whoosh": 0.10, "hit": 0.30, "thud": 0.45, "buzz": 0.08, "ding": 0.11, "rumble": 0.30}
+SFX_LEAD = {"whoosh": 0.24}   # 휙은 컷 순간에 가장 크게 (그만큼 먼저 시작)
+
+
+def _band(x, lo, hi):
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    X[(f < lo) | (f > hi)] = 0
+    return np.fft.irfft(X, len(x))
+
+
+def _tone(f0, f1, sec, decay):
+    t = np.arange(int(sec * SR)) / SR
+    return np.sin(2 * np.pi * np.cumsum(f0 + (f1 - f0) * t / sec) / SR) * np.exp(-t * decay)
+
+
+def _peak1(x):
+    return x / max(1e-9, float(np.abs(x).max()))
+
+
+def sfx_clip(kind, rs, sec=None):
+    """효과음 하나(모노, 최대 1). whoosh 컷 휙 · hit 묶음 바뀜 찰싹 · thud 착지 쿵 · buzz 모기 앵 · ding 띵 · rumble 우르릉."""
+    if kind == "whoosh":
+        n = int(0.34 * SR)
+        u = np.linspace(0, 1, n)
+        x = rs.normal(0, 1, n)
+        y = _band(x, 300, 1400) * (1 - u) + _band(x, 1800, 7500) * u
+        return _peak1(y * np.sin(np.pi * u ** 0.75) ** 2)
+    if kind == "hit":
+        n = int(0.42 * SR)
+        t = np.arange(n) / SR
+        slap = _peak1(_band(rs.normal(0, 1, n), 1200, 9000) * np.exp(-t * 55))
+        return _peak1(0.9 * slap + 0.55 * _tone(190, 70, 0.42, 20) + 0.5 * _tone(62, 42, 0.42, 7))
+    if kind == "thud":
+        n = int(0.8 * SR)
+        t = np.arange(n) / SR
+        return _peak1(_tone(78, 36, 0.8, 6) + 0.7 * _peak1(_band(rs.normal(0, 1, n), 40, 260)) * np.exp(-t * 14))
+    if kind == "buzz":
+        sec = sec or 1.6
+        t = np.arange(int(sec * SR)) / SR
+        f = 610 + 30 * np.sin(2 * np.pi * 6.0 * t) + 12 * np.sin(2 * np.pi * 1.3 * t)
+        ph = np.cumsum(f) / SR
+        saw = 2 * (ph % 1.0) - 1
+        am = (0.75 + 0.25 * np.sin(2 * np.pi * 9 * t)) * np.minimum(1, np.minimum(t / 0.15, (sec - t) / 0.3))
+        return _peak1(_band(saw, 400, 5000) * am)
+    if kind == "ding":
+        t = np.arange(int(1.4 * SR)) / SR
+        return _peak1((np.sin(2 * np.pi * 1318.5 * t) + 0.35 * np.sin(2 * np.pi * 2637 * t)) * np.exp(-t * 3.2))
+    if kind == "rumble":
+        sec = sec or 2.0
+        n = int(sec * SR)
+        t = np.arange(n) / SR
+        am = (0.7 + 0.3 * np.sin(2 * np.pi * 3.1 * t)) * np.minimum(1, np.minimum(t / 0.2, (sec - t) / 0.6))
+        return _peak1(_band(rs.normal(0, 1, n), 28, 190) * am)
+    raise ValueError(kind)
+
+
+def sfx_track(events, n, seed=1):
+    """events=[[초, 종류, 세기(, 길이)]] → n샘플 스테레오 (휙·찰싹은 좌우로 조금씩 흩음)."""
+    rs = np.random.default_rng(seed + 7)
+    out = np.zeros((n, 2))
+    for ev in events:
+        t, kind, g = ev[0], ev[1], ev[2]
+        x = sfx_clip(kind, rs, ev[3] if len(ev) > 3 else None) * SFX_GAIN[kind] * g
+        i = max(0, int((t - SFX_LEAD.get(kind, 0.0)) * SR))
+        x = x[:max(0, n - i)]
+        pan = float(rs.uniform(-0.25, 0.25)) if kind in ("whoosh", "hit") else 0.0
+        out[i:i + len(x), 0] += x * min(1.0, 1 - pan)
+        out[i:i + len(x), 1] += x * min(1.0, 1 + pan)
+    return out
 
 
 def make(meta, duration, out_dir):
@@ -172,5 +248,24 @@ def make(meta, duration, out_dir):
                   bpm=m.get("bpm", 72), seed=m.get("seed", 1), twist_at=m.get("twist_at"),
                   out_mid=out_dir / "music.mid")
     render(mid, out_dir / "music.wav")
-    master(out_dir / "music.wav", out_dir / "music.m4a", duration)
+    if not m.get("sfx"):
+        master(out_dir / "music.wav", out_dir / "music.m4a", duration)
+        return out_dir / "music.m4a"
+    raw = out_dir / "music_bed.f32"
+    master(out_dir / "music.wav", raw, duration)       # 배경음만 -23 LUFS
+    bed = np.fromfile(raw, np.float32).reshape(-1, 2).astype(np.float64)
+    mix = (bed + sfx_track(m["sfx"], len(bed), m.get("seed", 1))).astype(np.float32)
+    mix.tofile(raw)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw),
+                    "-af", "alimiter=limit=0.89", "-c:a", "aac", "-b:a", "192k", str(out_dir / "music.m4a")], check=True)
     return out_dir / "music.m4a"
+
+
+if __name__ == "__main__":   # 효과음 자체 점검 (fluidsynth 없이)
+    _rs = np.random.default_rng(0)
+    for _k in SFX_GAIN:
+        _c = sfx_clip(_k, _rs)
+        assert _c.ndim == 1 and len(_c) > 1000 and abs(float(np.abs(_c).max()) - 1.0) < 1e-6, _k
+    _tr = sfx_track([[0.0, "hit", 1.0], [1.0, "whoosh", 1.0], [2.9, "thud", 1.0]], 3 * SR)
+    assert _tr.shape == (3 * SR, 2) and 0.05 < float(np.abs(_tr).max()) < 1.0
+    print("sfx ok")
