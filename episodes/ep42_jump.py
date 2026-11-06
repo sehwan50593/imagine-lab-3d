@@ -96,7 +96,7 @@ META = {"id": "ep42", "title": "만약에 전 세계 80억 명이 같은 순간 
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
         "music": {"key": "C", "mode": "major", "bpm": 100, "seed": 421, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[t, "thud", 0.6] for t in _HOOK_LAND] +
-                                  [[_JUMP_LAND, "thud", 1.3], [_JUMP_LAND + 0.05, "rumble", 0.8, 1.6]])}}
+                                  [[_JUMP_LAND, "thud", 0.9], [_JUMP_LAND + 0.05, "rumble", 0.6, 1.6]])}}
 assert 60.5 <= DUR <= 70.0, DUR   # 틱톡 수익화 1분 넘김
 
 
