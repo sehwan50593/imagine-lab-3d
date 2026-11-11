@@ -77,7 +77,7 @@ STARTS, DUR = R.starts_of(LINES)
 BEATS = R.beats_of(LINES, STARTS, DUR, GROUPS, LN)
 META = {"id": "ep46", "title": "만약에 지구가 정육면체라면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "Ab", "mode": "major", "bpm": 100, "seed": 461, "twist_at": STARTS[TWIST],
+        "music": {"style": "mystery", "key": "Ab", "mode": "major", "bpm": 100, "seed": 461, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[STARTS[LN["crumble"]] + 0.1, "rumble", 0.55, 2.2]])}}
 GRADE = {"exposure": 0.95, "bloom": 0.10, "bloom_thr": 1.4, "vignette": 0.14}
 

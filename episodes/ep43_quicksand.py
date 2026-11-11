@@ -81,7 +81,7 @@ _SNAPS = [[STARTS[LN["hook"]] + 0.434 + 0.7 * n, "thud", 0.35] for n in range(4)
          [[STARTS[LN["pull"]] + 0.341 + 0.55 * n, "thud", 0.25] for n in range(5)]
 META = {"id": "ep43", "title": "만약에 퀵샌드에 빠진다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "D", "mode": "lydian", "bpm": 98, "seed": 431, "twist_at": STARTS[TWIST],
+        "music": {"style": "mystery", "key": "D", "mode": "lydian", "bpm": 98, "seed": 431, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, _SNAPS + [[STARTS[LN["tide"]] + 0.2, "rumble", 0.5, 2.4],
                                                                 [STARTS[LN["app"]] + 0.8, "ding", 1.0]])}}
 GRADE = {"exposure": 0.92, "bloom": 0.12, "bloom_thr": 1.4, "vignette": 0.16}

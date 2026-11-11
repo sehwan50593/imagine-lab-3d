@@ -88,7 +88,7 @@ BEATS = R.beats_of(LINES, STARTS, DUR, GROUPS, LN)
 _SLAP = STARTS[LN["slap"]]
 META = {"id": "ep47", "title": "만약에 모기가 전부 사라진다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "F", "mode": "major", "bpm": 100, "seed": 471, "twist_at": STARTS[TWIST],
+        "music": {"style": "funny", "key": "F", "mode": "major", "bpm": 100, "seed": 471, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[0.0, "buzz", 1.0, HK_MOS], [HK_MOS, "ding", 1.0],
                                                        [_SLAP + 0.1, "buzz", 1.0, SLAP_T - 0.1], [_SLAP + SLAP_T, "hit", 1.3]])}}
 GRADE = {"exposure": 0.95, "bloom": 0.12, "bloom_thr": 1.4, "vignette": 0.14}

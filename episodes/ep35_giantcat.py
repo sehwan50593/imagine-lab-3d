@@ -128,7 +128,7 @@ DUR = float(TIMELINE["dur"])
 STARTS = [float(s) for s, _, _ in TIMELINE["lines"]]
 META = {"id": "ep35", "title": "만약에 고양이가 사람만큼 커진다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "G", "mode": "major", "bpm": 108, "seed": 351, "twist_at": STARTS[TWIST]}}
+        "music": {"style": "funny", "key": "G", "mode": "major", "bpm": 108, "seed": 351, "twist_at": STARTS[TWIST]}}
 BEATS = []
 GRADE = {"exposure": 0.9, "bloom": 0.1, "bloom_thr": 1.5, "vignette": 0.16}
 

@@ -159,7 +159,7 @@ DUR = float(TIMELINE["dur"])
 STARTS = [float(s) for s, _, _ in TIMELINE["lines"]]
 META = {"id": "ep36", "title": "만약에 서울에 규모 7 지진이 온다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "D", "mode": "major", "bpm": 96, "seed": 361, "twist_at": STARTS[TWIST]}}
+        "music": {"style": "tense", "key": "D", "mode": "major", "bpm": 96, "seed": 361, "twist_at": STARTS[TWIST]}}
 BEATS = []
 GRADE = {"exposure": 0.9, "bloom": 0.12, "bloom_thr": 1.4, "vignette": 0.16}
 

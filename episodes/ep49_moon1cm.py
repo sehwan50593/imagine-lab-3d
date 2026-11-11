@@ -82,7 +82,7 @@ BEATS = R.beats_of(LINES, STARTS, DUR, GROUPS, LN)
 _CRACKS = [LINES[0]["d"] - 0.6, STARTS[TWIST] + 0.42 * LINES[TWIST]["d"]]
 META = {"id": "ep49", "title": "만약에 달이 하루 1cm씩 지구에 가까워진다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "B", "mode": "lydian", "bpm": 96, "seed": 491, "twist_at": STARTS[TWIST],
+        "music": {"style": "space", "key": "B", "mode": "lydian", "bpm": 96, "seed": 491, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[c, "thud", 0.75] for c in _CRACKS] +
                                   [[c + 0.03, "rumble", 0.55, 1.4] for c in _CRACKS] +
                                   [[STARTS[LN["wall"]] + 0.3, "rumble", 0.5, 2.2]])}}

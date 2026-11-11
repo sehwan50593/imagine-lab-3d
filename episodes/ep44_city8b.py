@@ -78,7 +78,7 @@ STARTS, DUR = R.starts_of(LINES)
 BEATS = R.beats_of(LINES, STARTS, DUR, GROUPS, LN)
 META = {"id": "ep44", "title": "만약에 80억 명이 한 도시에 산다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "Bb", "mode": "major", "bpm": 100, "seed": 441, "twist_at": STARTS[TWIST],
+        "music": {"style": "retro", "key": "Bb", "mode": "major", "bpm": 100, "seed": 441, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[STARTS[LN["mount"]] + 0.3, "rumble", 0.45, 2.4]])}}
 GRADE = {"exposure": 0.92, "bloom": 0.12, "bloom_thr": 1.4, "vignette": 0.16}
 

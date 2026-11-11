@@ -139,7 +139,7 @@ DUR = float(TIMELINE["dur"])
 STARTS = [float(s) for s, _, _ in TIMELINE["lines"]]
 META = {"id": "ep39", "title": "만약에 라면이 사라진다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "Bb", "mode": "major", "bpm": 116, "seed": 391, "twist_at": STARTS[TWIST]}}
+        "music": {"style": "funny", "key": "Bb", "mode": "major", "bpm": 116, "seed": 391, "twist_at": STARTS[TWIST]}}
 BEATS = []
 GRADE = {"exposure": 0.9, "bloom": 0.12, "bloom_thr": 1.4, "vignette": 0.16}
 

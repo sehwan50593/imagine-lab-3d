@@ -80,7 +80,7 @@ STARTS, DUR = R.starts_of(LINES)
 BEATS = R.beats_of(LINES, STARTS, DUR, GROUPS, LN)
 META = {"id": "ep48", "title": "만약에 사람이 곰처럼 겨울잠을 잔다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "Eb", "mode": "lydian", "bpm": 90, "seed": 481, "twist_at": STARTS[TWIST],
+        "music": {"style": "calm", "key": "Eb", "mode": "lydian", "bpm": 90, "seed": 481, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[STARTS[LN["heart"]] + 0.5, "thud", 0.35],
                                                        [STARTS[LN["heart"]] + 2.0, "thud", 0.35],
                                                        [STARTS[LN["growl"]] + 0.3, "rumble", 0.4, 0.9]])}}

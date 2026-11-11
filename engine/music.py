@@ -145,6 +145,115 @@ def compose(duration, key="C", mode="major", bpm=72, seed=1, twist_at=None, out_
     return out_mid
 
 
+# ── 주제별 분위기 (11-12 오너: "맨날 똑같은 bgm이라 질려") — compose()는 'calm'으로 남김 ──
+SCALE.update({"minor": [0, 2, 3, 5, 7, 8, 10], "dorian": [0, 2, 3, 5, 7, 9, 10],
+              "harmonic": [0, 2, 3, 5, 7, 8, 11]})
+# GM 악기 번호: pad·arp·lead·bass, bass 패턴(pulse 8분/bounce 1·3박 끊어/long 온음), 드럼 패턴, 진행
+STYLES = {
+    "tense":   dict(mode="minor", bpm=112, pad=48, arp=45, lead=None, bass=(43, "pulse"), drums="tense",
+                    prog=[[1, 1, 6, 7], [1, 6, 4, 5]]),
+    "epic":    dict(mode="minor", bpm=88, pad=52, arp=48, lead=61, bass=(58, "long"), drums="epic",
+                    prog=[[1, 6, 3, 7], [6, 4, 1, 5]]),
+    "funny":   dict(mode="major", bpm=124, pad=None, arp=12, lead=45, bass=(58, "bounce"), drums="light",
+                    prog=[[1, 4, 5, 1], [1, 6, 2, 5]]),
+    "space":   dict(mode="lydian", bpm=84, pad=91, arp=88, lead=98, bass=(38, "long"), drums=None,
+                    prog=[[1, 2, 1, 5], [1, 6, 2, 1]]),
+    "mystery": dict(mode="harmonic", bpm=92, pad=95, arp=11, lead=8, bass=(32, "long"), drums="light",
+                    prog=[[1, 6, 4, 5], [1, 4, 1, 5]]),
+    "retro":   dict(mode="major", bpm=136, pad=None, arp=81, lead=80, bass=(38, "pulse"), drums="rock",
+                    prog=[[1, 5, 6, 4], [6, 4, 1, 5]]),
+    "pop":     dict(mode="major", bpm=108, pad=89, arp=4, lead=11, bass=(33, "bounce"), drums="rock",
+                    prog=[[1, 5, 6, 4], [4, 1, 5, 6]]),
+}
+# 드럼(ch9) 한 마디 = 16칸: (칸, 음, 세기). 36 킥·38 스네어·42 닫힌 하이햇·45/47 탐·37 림·49 크래시
+DRUMS = {
+    "rock":  [(s, 36, 96) for s in (0, 8)] + [(s, 38, 88) for s in (4, 12)] + [(s, 42, 52) for s in range(0, 16, 2)],
+    "light": [(0, 36, 70), (8, 36, 60)] + [(s, 37, 50) for s in (4, 12)] + [(s, 42, 40) for s in range(2, 16, 4)],
+    "tense": [(s, 36, 92) for s in (0, 6, 8, 14)] + [(s, 42, 46) for s in range(0, 16, 2)] + [(12, 38, 70)],
+    "epic":  [(0, 36, 110), (8, 36, 96), (10, 45, 80), (12, 47, 90), (14, 47, 96)],
+}
+
+
+def compose_style(duration, style, key="C", bpm=None, seed=1, twist_at=None, out_mid="music.mid"):
+    st = STYLES[style]
+    rs = np.random.default_rng(seed)
+    scale = SCALE[st["mode"]]
+    tonic = KEYS[key] - 12 if KEYS[key] > 64 else KEYS[key]
+    bpm = bpm or st["bpm"]
+    beat, bar = PPQ, PPQ * 4
+    six = beat // 4
+    n_bars = int(np.ceil(duration / (60.0 / bpm) / 4)) + 1
+    prog = st["prog"][int(rs.integers(len(st["prog"])))]
+    twist_bar = int(twist_at / (60.0 / bpm) / 4) if twist_at else None
+    tr = {k: [] for k in ("pad", "arp", "lead", "bass", "drum")}
+    ch = {"pad": 1, "arp": 2, "lead": 0, "bass": 3, "drum": 9}
+    meta = [(0, b"\xff\x51\x03" + int(60_000_000 / bpm).to_bytes(3, "big")), (0, b"\xff\x58\x04\x04\x02\x18\x08")]
+    for k, vol in (("pad", 52), ("arp", 70), ("lead", 84), ("bass", 92)):
+        prog_no = st["bass"][0] if k == "bass" else st[k]
+        if prog_no is not None:
+            tr[k] += [(0, bytes([0xC0 | ch[k], prog_no])), (0, bytes([0xB0 | ch[k], 7, vol])),
+                      (0, bytes([0xB0 | ch[k], 91, 70]))]
+    tr["drum"].append((0, bytes([0xB9, 7, 84])))
+
+    def note(k, t, p, dur, vel):
+        t = int(max(0, t + rs.normal(0, 4)))
+        vel = int(np.clip(vel + rs.normal(0, 4), 18, 120))
+        tr[k].append((t, bytes([0x90 | ch[k], int(p), vel]), 1))
+        tr[k].append((t + max(30, int(dur)), bytes([0x80 | ch[k], int(p), 0]), 0))
+
+    motif, prev = None, tonic + 12 + scale[2]
+    for b in range(n_bars):
+        deg = prog[(b // 2) % 4]
+        quiet = False
+        if twist_bar is not None and b >= twist_bar:
+            deg = [6, 4, 1, 5][((b - twist_bar) // 2) % 4]
+            quiet = b < twist_bar + 2              # 반전 순간 2마디는 잦아들었다가 다시
+        tones = chord_tones(tonic, scale, deg, "triad")
+        t0, last = b * bar, b == n_bars - 1
+        energy = 0.6 + 0.4 * min(1.0, b / 4.0)
+        if st["pad"] is not None and (b % 2 == 0 or last):
+            for p in tones:
+                note("pad", t0, p, bar * 2 - 40, 44 * energy)
+        if last:
+            note("bass", t0, tones[0] - 24, bar, 70)
+            break
+        bp, kind = st["bass"]
+        root = tones[0] - 24 if tones[0] - 24 >= 28 else tones[0] - 12
+        if kind == "pulse":
+            for i in range(8):
+                note("bass", t0 + i * beat // 2, root, beat // 2 - 30, (74 if i % 2 == 0 else 58) * energy)
+        elif kind == "bounce":
+            for i, p in enumerate((root, root + 7, root, root + 7)):
+                note("bass", t0 + i * beat, p, beat * 0.45, 76 * energy)
+        else:
+            note("bass", t0, root, bar - 30, 70 * energy)
+        if quiet:
+            continue
+        if st["arp"] is not None and b >= 1:
+            ar = tones + [tones[0] + 12, tones[1] + 12]
+            step = six * 2 if bpm < 120 else beat // 2
+            for i in range(bar // step):
+                note("arp", t0 + i * step, ar[[0, 1, 2, 3, 2, 1, 4, 1][i % 8]] + 12, step * 0.8, 52 * energy)
+        if st["lead"] is not None and b >= 2:
+            if motif is None or (b % 4 == 0 and rs.random() < 0.5):
+                motif = sorted(set(float(x) for x in rs.choice([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
+                                                               size=int(rs.integers(3, 6)), replace=False)))
+            cands = np.array(sorted(set([p + 12 for p in tones] + [tonic + 12 + s for s in scale])))
+            for bt in motif:
+                w = np.exp(-np.abs(cands - prev) / 3.0)
+                w[np.isin(cands, [p + 12 for p in tones])] *= 2.2
+                prev = int(rs.choice(cands, p=w / w.sum()))
+                note("lead", t0 + bt * beat, prev, beat * float(rs.choice([0.5, 1, 1.5])), 70 * energy)
+        if st["drums"] and b >= 2:
+            for s, p, v in DRUMS[st["drums"]]:
+                note("drum", t0 + s * six, p, six, v * energy)
+            if b % 8 == 2:
+                note("drum", t0, 49, beat, 90)
+    hdr = b"MThd" + struct.pack(">IHHH", 6, 1, 1 + len(tr), PPQ)
+    Path(out_mid).write_bytes(hdr + track(meta) + b"".join(track(v) for v in tr.values()))
+    return out_mid
+
+
 def render(mid, wav, sf2=None):
     sf2 = sf2 or next((s for s in SOUNDFONTS if Path(s).exists()), None)
     if not sf2:
@@ -244,9 +353,13 @@ def make(meta, duration, out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     m = meta.get("music", {})
-    mid = compose(duration + 4, key=m.get("key", "C"), mode=m.get("mode", "major"),
-                  bpm=m.get("bpm", 72), seed=m.get("seed", 1), twist_at=m.get("twist_at"),
-                  out_mid=out_dir / "music.mid")
+    if m.get("style", "calm") != "calm":
+        mid = compose_style(duration + 4, m["style"], key=m.get("key", "C"), seed=m.get("seed", 1),
+                            twist_at=m.get("twist_at"), out_mid=out_dir / "music.mid")
+    else:
+        mid = compose(duration + 4, key=m.get("key", "C"), mode=m.get("mode", "major"),
+                      bpm=m.get("bpm", 72), seed=m.get("seed", 1), twist_at=m.get("twist_at"),
+                      out_mid=out_dir / "music.mid")
     render(mid, out_dir / "music.wav")
     if not m.get("sfx"):
         master(out_dir / "music.wav", out_dir / "music.m4a", duration)
@@ -269,3 +382,9 @@ if __name__ == "__main__":   # 효과음 자체 점검 (fluidsynth 없이)
     _tr = sfx_track([[0.0, "hit", 1.0], [1.0, "whoosh", 1.0], [2.9, "thud", 1.0]], 3 * SR)
     assert _tr.shape == (3 * SR, 2) and 0.05 < float(np.abs(_tr).max()) < 1.0
     print("sfx ok")
+    for _s in STYLES:   # 분위기별 MIDI 자체 점검
+        _p = Path(f"/tmp/_t_{_s}.mid") if Path("/tmp").exists() else Path(f"_t_{_s}.mid")
+        compose_style(20, _s, key="D", seed=5, twist_at=12, out_mid=_p)
+        assert _p.read_bytes()[:4] == b"MThd" and _p.stat().st_size > 500, _s
+        _p.unlink()
+    print("styles ok")

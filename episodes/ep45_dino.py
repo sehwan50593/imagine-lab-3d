@@ -81,7 +81,7 @@ T_BURST = 0.95        # 훅: 불덩이가 번쩍하는 때(줄 시작 후 초)
 HK_REF = 0.4          # 훅 하늘 물체의 기준 카메라 시점(τ)
 META = {"id": "ep45", "title": "만약에 공룡이 멸종하지 않았다면?", "duration": DUR,
         "render": {"pct": 67, "samples": 12, "bounces": 3, "chunks": 9},
-        "music": {"key": "G", "mode": "lydian", "bpm": 96, "seed": 451, "twist_at": STARTS[TWIST],
+        "music": {"style": "epic", "key": "G", "mode": "lydian", "bpm": 96, "seed": 451, "twist_at": STARTS[TWIST],
                   "sfx": R.sfx_of(STARTS, GROUPS, LN, [[T_BURST - 0.6, "rumble", 0.6, 1.8], [T_BURST, "thud", 0.8]])}}
 
 
